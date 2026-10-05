@@ -13,10 +13,6 @@ function AIIntelligence() {
   const canonical = getCanonicalHealth(dns)
 
   const {
-    health,
-  } = dns.system
-
-  const {
     latency,
   } = dns.performance
 

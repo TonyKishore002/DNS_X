@@ -30,14 +30,14 @@ function NetworkHealthSection() {
       status: canonical.status === 'HEALTHY' ? 'healthy' : canonical.status === 'NOT_FOUND' ? 'info' : canonical.status === 'DEGRADED' ? 'warning' : 'critical',
     },
     {
-      label: isPublicTarget ? 'PROBE ACTIVITY' : 'DNS QPS',
-      value: isPublicTarget ? 'N/A' : (dns.traffic.qps ? Number(dns.traffic.qps).toLocaleString() : 'N/A'),
+      label: 'DNS QPS',
+      value: isPublicTarget ? 'N/A' : (dns.traffic?.qps ? Number(dns.traffic.qps).toLocaleString() : 'N/A'),
       unit: isPublicTarget ? '' : 'QPS',
-      change: isPublicTarget ? 'OBSERVATION RATE' : 'COLLECTOR AGENT',
+      change: isPublicTarget ? 'PUBLIC TARGET' : 'COLLECTOR AGENT',
       direction: 'down',
       icon: Network,
       status: 'healthy',
-      subnote: isPublicTarget ? 'DNS QPS = N/A (probe activity only)' : null,
+      subnote: isPublicTarget ? 'DNS QPS = N/A (PUBLIC TARGET)' : null,
     },
     {
       label: 'RESPONSE LATENCY',

@@ -1,7 +1,7 @@
 /**
  * routes/auth.js
- * Real Google Account Authentication & Verification endpoint.
- * Requires genuine Gmail ID and password.
+ * Google Identity & DNS MX Verification endpoint.
+ * Zero user passwords are required, validated, or handled.
  * POST /api/v1/auth/verify-google
  */
 
@@ -18,20 +18,15 @@ router.post(
     body('email')
       .trim()
       .notEmpty()
-      .withMessage('Gmail ID or Google account email is required')
+      .withMessage('Google account email or Gmail ID is required')
       .isEmail()
-      .withMessage('A valid Gmail address is required'),
-    body('password')
-      .notEmpty()
-      .withMessage('Password of the Google account is required')
-      .isLength({ min: 8 })
-      .withMessage('Google passwords must be at least 8 characters long'),
+      .withMessage('A valid Google email address is required'),
   ],
   validate,
   async (req, res, next) => {
     try {
-      const { email, password } = req.body
-      const result = await verifyGoogleAccount(email, password)
+      const { email } = req.body
+      const result = await verifyGoogleAccount(email)
 
       if (!result.verified) {
         return res.status(400).json({

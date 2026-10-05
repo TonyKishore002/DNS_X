@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X, CheckCircle2, ChevronRight, AlertCircle, Eye, EyeOff, KeyRound } from 'lucide-react'
+import { X, CheckCircle2, ChevronRight, AlertCircle, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 
 function GoogleLogo({ className = 'h-5 w-5' }) {
@@ -27,45 +27,31 @@ function GoogleLogo({ className = 'h-5 w-5' }) {
 
 function GoogleAuthModal({ isOpen, onClose, onAuthenticated }) {
   const { signInWithGoogle, isAuthenticating, authError } = useAuth()
-  const [googleEmail, setGoogleEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
+  const [loginHint, setLoginHint] = useState('')
   const [clientError, setClientError] = useState(null)
   const [isSuccess, setIsSuccess] = useState(false)
 
   if (!isOpen) return null
 
-  const handleGoogleSubmit = async (e) => {
+  const handleOAuthSubmit = async (e) => {
     e?.preventDefault()
     setClientError(null)
 
-    const trimmedEmail = googleEmail.trim()
-    const trimmedPassword = password.trim()
-
-    if (!trimmedEmail) {
-      setClientError('Gmail address or Google account ID is required. Input cannot be empty.')
-      return
-    }
-
-    if (!trimmedPassword) {
-      setClientError('Password of the Google account is required.')
-      return
-    }
-
-    if (trimmedPassword.length < 8) {
-      setClientError('Google account passwords must be at least 8 characters long.')
+    const trimmedHint = loginHint.trim()
+    if (trimmedHint && !trimmedHint.includes('@')) {
+      setClientError('Please enter a valid Google email format (e.g. operator@gmail.com).')
       return
     }
 
     try {
-      const user = await signInWithGoogle(trimmedEmail, trimmedPassword)
+      const res = await signInWithGoogle({ email: trimmedHint })
       setIsSuccess(true)
       setTimeout(() => {
-        if (onAuthenticated) onAuthenticated(user)
+        if (onAuthenticated) onAuthenticated(res)
         onClose()
       }, 500)
     } catch (err) {
-      setClientError(err.message || 'Google account verification failed.')
+      setClientError(err.message || 'Google OAuth authentication failed.')
     }
   }
 
@@ -93,9 +79,9 @@ function GoogleAuthModal({ isOpen, onClose, onAuthenticated }) {
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-white/15 bg-white/[0.06] p-2.5 shadow-lg backdrop-blur-xl">
             <GoogleLogo className="h-8 w-8" />
           </div>
-          <h2 className="mt-3 text-xl font-bold tracking-tight text-white">Google Authentication</h2>
+          <h2 className="mt-3 text-xl font-bold tracking-tight text-white">Google Identity Verification</h2>
           <p className="mt-1.5 text-[12px] text-[#9cb1bc]">
-            Access to <span className="text-white font-medium">NOC WORKSPACE GATED</span> requires verified Google authorization.
+            Access to <span className="text-white font-medium">NOC WORKSPACE GATED</span> requires verified Google OAuth authorization.
           </p>
         </div>
 
@@ -106,52 +92,30 @@ function GoogleAuthModal({ isOpen, onClose, onAuthenticated }) {
           </div>
         )}
 
-        <form onSubmit={handleGoogleSubmit} className="mt-5 space-y-3.5">
+        <form onSubmit={handleOAuthSubmit} className="mt-5 space-y-4">
           <div>
-            <label className="block text-[10px] font-mono uppercase tracking-wider text-[#8fa6b0] mb-1.5">
-              Gmail ID / Google Account Email
-            </label>
+            <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-[#8fa6b0] mb-1.5">
+              <span>Google Account (Optional Hint)</span>
+              <span className="flex items-center gap-1 text-emerald-400 text-[9px]">
+                <ShieldCheck size={11} />
+                OAUTH 2.0
+              </span>
+            </div>
             <input
               type="email"
-              value={googleEmail}
+              value={loginHint}
               onChange={(e) => {
-                setGoogleEmail(e.target.value)
+                setLoginHint(e.target.value)
                 if (clientError) setClientError(null)
               }}
-              placeholder="e.g. operator@gmail.com"
+              placeholder="e.g. operator@gmail.com (optional)"
               disabled={isAuthenticating || isSuccess}
               className="w-full rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 text-[13px] text-white placeholder-white/25 focus:border-cyan-400/50 focus:outline-none focus:ring-1 focus:ring-cyan-400/20"
             />
           </div>
 
-          <div>
-            <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-[#8fa6b0] mb-1.5">
-              <span>Google Account Password</span>
-              <span className="flex items-center gap-1 text-[#8faab8] text-[9px]">
-                <KeyRound size={10} />
-                REQUIRED (8+ CHARS)
-              </span>
-            </div>
-            <div className="relative">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value)
-                  if (clientError) setClientError(null)
-                }}
-                placeholder="Google account password"
-                disabled={isAuthenticating || isSuccess}
-                className="w-full rounded-xl border border-white/15 bg-black/40 px-3.5 py-2.5 pr-10 text-[13px] text-white placeholder-white/25 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-2.5 text-white/50 hover:text-white transition-colors cursor-pointer"
-              >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
+          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-2.5 text-[11px] font-mono text-[#8fa6b0]">
+            DNS_X connects via official Google OAuth. Zero credentials are ever requested or stored.
           </div>
 
           <button
@@ -167,12 +131,12 @@ function GoogleAuthModal({ isOpen, onClose, onAuthenticated }) {
             ) : isAuthenticating ? (
               <div className="flex items-center gap-2 text-gray-800">
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
-                <span>Verifying with Google...</span>
+                <span>Connecting to Google...</span>
               </div>
             ) : (
               <>
                 <GoogleLogo className="h-4 w-4" />
-                <span>Verify with Google</span>
+                <span>Continue with Google</span>
                 <ChevronRight size={15} className="text-gray-400" />
               </>
             )}

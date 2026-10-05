@@ -52,9 +52,19 @@ function NocHeader() {
           </div>
 
           <div className="glass-card flex items-center gap-2 px-3 py-1 rounded-xl">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_#22c55e]" />
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                canonical.isSystemOffline
+                  ? 'bg-amber-400 shadow-[0_0_6px_#f59e0b]'
+                  : 'bg-emerald-400 shadow-[0_0_6px_#22c55e]'
+              }`}
+            />
             <span className="text-[#7d95a2]">SYSTEM:</span>
-            <span className="text-emerald-400 font-semibold uppercase">
+            <span
+              className={`font-semibold uppercase ${
+                canonical.isSystemOffline ? 'text-amber-400' : 'text-emerald-400'
+              }`}
+            >
               {canonical.systemLabel || 'ONLINE'}
             </span>
           </div>

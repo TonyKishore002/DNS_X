@@ -1,21 +1,12 @@
-import { LogOut } from 'lucide-react'
-import { useNavigate, Link } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import useDNSState from '../../hooks/useDNSState'
 import { getCanonicalHealth } from '../../utils/canonicalHealth'
-import { useAuth } from '../../contexts/AuthContext'
 
 function Navbar() {
   const dns = useDNSState()
   const { target } = dns
   const isActive = target?.state === 'ACTIVE'
   const canonical = getCanonicalHealth(dns)
-  const { user, signOut } = useAuth()
-  const navigate = useNavigate()
-
-  const handleSignOut = async () => {
-    await signOut()
-    navigate('/')
-  }
 
   return (
     <header className="fixed left-[218px] right-0 top-0 z-30 flex h-[56px] items-center justify-between border-b border-white/[0.08] bg-[#0a111d]/50 px-6 backdrop-blur-2xl shadow-[0_4px_24px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.06)]">
@@ -69,38 +60,6 @@ function Navbar() {
                 : canonical.label}
           </span>
         </div>
-
-        {/* Google Authenticated User Profile & Sign Out */}
-        {user && (
-          <div className="flex items-center gap-2 border-l border-white/10 pl-3">
-            <div className="glass-pill-subtle flex items-center gap-2 px-2.5 py-1">
-              {user.avatar ? (
-                <img
-                  src={user.avatar}
-                  alt={user.name}
-                  className="h-5 w-5 rounded-full border border-white/20 object-cover"
-                />
-              ) : (
-                <div className="flex h-5 w-5 items-center justify-center rounded-full bg-cyan-500/20 text-[10px] font-semibold text-cyan-300">
-                  {user.name?.[0] || 'G'}
-                </div>
-              )}
-              <span className="max-w-[120px] truncate text-[11px] font-medium text-white/90">
-                {user.name}
-              </span>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleSignOut}
-              title="Sign Out to Landing Page"
-              className="glass-pill-subtle flex h-7 items-center gap-1.5 px-2 text-[10px] font-mono text-[#8fa6b0] transition-colors hover:border-red-400/40 hover:bg-red-500/10 hover:text-red-300"
-            >
-              <LogOut size={12} />
-              <span className="hidden sm:inline">SIGN OUT</span>
-            </button>
-          </div>
-        )}
       </div>
     </header>
   )

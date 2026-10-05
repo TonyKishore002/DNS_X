@@ -97,14 +97,14 @@ class RealtimeClient {
         }
       }
 
-      this.ws.onclose = (event) => {
+      this.ws.onclose = (_event) => {
         this._setStatus('disconnected')
         if (this.shouldConnect) {
           this._scheduleReconnect()
         }
       }
 
-      this.ws.onerror = (err) => {
+      this.ws.onerror = (_err) => {
         // ws onclose will fire right after this to handle reconnect
         this._setStatus('disconnected')
       }
@@ -199,10 +199,15 @@ export const realtimeClient = new RealtimeClient()
  */
 export function useRealtime(eventName, callback) {
   const callbackRef = useRef(callback)
-  callbackRef.current = callback
 
   useEffect(() => {
-    if (!eventName || !callbackRef.current) return
+    callbackRef.current = callback
+  }, [callback])
+
+  const eventKey = Array.isArray(eventName) ? eventName.join(',') : (eventName || '')
+
+  useEffect(() => {
+    if (!eventName) return
 
     const events = Array.isArray(eventName) ? eventName : [eventName]
     const unsubs = events.map((ev) =>
@@ -216,7 +221,7 @@ export function useRealtime(eventName, callback) {
     return () => {
       unsubs.forEach((unsub) => unsub())
     }
-  }, [Array.isArray(eventName) ? eventName.join(',') : eventName])
+  }, [eventKey, eventName])
 }
 
 /**

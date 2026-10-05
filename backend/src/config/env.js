@@ -15,8 +15,8 @@ const __dirname = path.dirname(__filename)
 
 // 1. Try backend/.env
 dotenv.config({ path: path.resolve(__dirname, '../../.env') })
-// 2. Try root .env
-dotenv.config({ path: path.resolve(__dirname, '../../../../.env') })
+// 2. Try root dns_x/.env
+dotenv.config({ path: path.resolve(__dirname, '../../../.env') })
 // 3. Fallback to process.cwd() .env
 dotenv.config()
 
@@ -67,7 +67,10 @@ export const IS_DEVELOPMENT = NODE_ENV === 'development'
 
 // ── Security ──────────────────────────────────────────────────────────────────
 export const API_KEY      = optional('API_KEY', '')
-export const CORS_ORIGINS = optional('CORS_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173')
+export const CORS_ORIGINS = optional(
+  'CORS_ORIGINS',
+  'http://localhost:5173,http://127.0.0.1:5173,https://dns-x002.vercel.app,https://dns-x-002.vercel.app'
+)
   .split(',')
   .map((o) => o.trim())
   .filter(Boolean)

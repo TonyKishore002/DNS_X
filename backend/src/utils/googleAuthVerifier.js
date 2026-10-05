@@ -2,12 +2,19 @@ import dns from 'dns';
 
 dns.promises.setServers(['8.8.8.8', '1.1.1.1']);
 
-export async function verifyGoogleAccount(email, password) {
+/**
+ * Validates Google account format and checks DNS MX records for Google Workspace / Gmail.
+ * Never requests, validates, or handles user passwords.
+ *
+ * @param {string} email - Google email or Gmail ID
+ * @returns {Promise<{ verified: boolean, error?: string, email?: string, username?: string, provider?: string, accountType?: string, domain?: string, verifiedAt?: string }>}
+ */
+export async function verifyGoogleAccount(email) {
   // 1. Mandatory Email Validation
   if (!email || typeof email !== 'string') {
     return {
       verified: false,
-      error: 'Google account / Gmail ID is required. Input cannot be empty.',
+      error: 'Google account / Gmail address is required. Input cannot be empty.',
     };
   }
 
@@ -15,7 +22,7 @@ export async function verifyGoogleAccount(email, password) {
   if (!trimmedEmail) {
     return {
       verified: false,
-      error: 'Google account / Gmail ID is required. Input cannot be empty.',
+      error: 'Google account / Gmail address is required. Input cannot be empty.',
     };
   }
 
@@ -24,7 +31,7 @@ export async function verifyGoogleAccount(email, password) {
   if (!emailRegex.test(trimmedEmail)) {
     return {
       verified: false,
-      error: 'Invalid Gmail address format. Please enter a valid Gmail ID (e.g. username@gmail.com).',
+      error: 'Invalid Gmail address format. Please enter a valid Google account (e.g. username@gmail.com).',
     };
   }
 
@@ -36,30 +43,7 @@ export async function verifyGoogleAccount(email, password) {
     };
   }
 
-  // 2. Mandatory Password Validation
-  if (!password || typeof password !== 'string') {
-    return {
-      verified: false,
-      error: 'Password for your Google account is required.',
-    };
-  }
-
-  const trimmedPassword = password.trim();
-  if (!trimmedPassword) {
-    return {
-      verified: false,
-      error: 'Password cannot be empty or blank.',
-    };
-  }
-
-  if (trimmedPassword.length < 8) {
-    return {
-      verified: false,
-      error: 'Invalid password. Google account passwords must be at least 8 characters long.',
-    };
-  }
-
-  // 3. Direct Gmail / Googlemail Verification
+  // 2. Direct Gmail / Googlemail Verification
   if (domain === 'gmail.com' || domain === 'googlemail.com') {
     // Google username requirements: 6-30 chars, alphanumeric or periods
     const normalizedLocal = localPart.replace(/\./g, '');
@@ -99,7 +83,7 @@ export async function verifyGoogleAccount(email, password) {
     };
   }
 
-  // 4. Custom Domain (Google Workspace) Verification
+  // 3. Custom Domain (Google Workspace) Verification via DNS MX
   try {
     const mxRecords = await dns.promises.resolveMx(domain);
     if (!mxRecords || mxRecords.length === 0) {

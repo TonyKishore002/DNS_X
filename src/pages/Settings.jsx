@@ -5,7 +5,6 @@ import {
   Gauge,
   Globe2,
   Radio,
-  RefreshCw,
   Server,
   Settings2,
   ShieldCheck,

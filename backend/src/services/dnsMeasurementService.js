@@ -14,7 +14,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import logger from '../config/logger.js'
 import { recordDnsMeasurement, getRecentMeasurements } from '../repositories/dnsMeasurementRepository.js'
-import { ingestMetrics } from './telemetryService.js'
+import { ingestMetrics, setCurrentTelemetrySnapshot } from './telemetryService.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -546,6 +546,7 @@ export function clearActiveTargetDomain() {
     clearInterval(_probeInterval)
     _probeInterval = null
   }
+  setCurrentTelemetrySnapshot(null)
   logger.info('Active DNS target cleared')
 }
 

@@ -4,8 +4,6 @@ import Sidebar from './components/layout/Sidebar'
 import Navbar from './components/layout/Navbar'
 import AppRoutes from './routes/AppRoutes'
 import LandingPage from './components/landing/LandingPage'
-import GoogleAuthPage from './pages/GoogleAuthPage'
-import ProtectedRoute from './components/auth/ProtectedRoute'
 import DotField from './components/ui/DotField'
 
 function DashboardLayout() {
@@ -60,33 +58,17 @@ function DashboardLayout() {
 function MainApp() {
   return (
     <Routes>
-      {/* 1. Landing Page appears first at / */}
+      {/* 1. Landing Page appears at / and /landing */}
       <Route path="/" element={<LandingPage />} />
       <Route path="/landing" element={<LandingPage />} />
 
-      {/* 2. Dedicated Google Authentication Page */}
-      <Route path="/auth" element={<GoogleAuthPage />} />
-      <Route path="/login" element={<GoogleAuthPage />} />
+      {/* 2. Direct NOC Workspace & Settings Routes (No login required) */}
+      <Route path="/noc" element={<DashboardLayout />} />
+      <Route path="/settings" element={<DashboardLayout />} />
 
-      {/* 3. Gated NOC Workspace Route (Protected by Google Authentication) */}
-      <Route
-        path="/noc"
-        element={
-          <ProtectedRoute>
-            <DashboardLayout />
-          </ProtectedRoute>
-        }
-      />
-
-      {/* 4. Settings Route */}
-      <Route
-        path="/settings"
-        element={
-          <ProtectedRoute>
-            <DashboardLayout />
-          </ProtectedRoute>
-        }
-      />
+      {/* 3. Auth & Login redirects directly to NOC workspace */}
+      <Route path="/auth" element={<Navigate to="/noc" replace />} />
+      <Route path="/login" element={<Navigate to="/noc" replace />} />
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />

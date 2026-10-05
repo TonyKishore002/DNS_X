@@ -1,62 +1,120 @@
 /**
  * src/services/authService.js
- * Real Google Account Authentication & Live DNS Verification client.
- * Requires genuine Gmail ID and password.
+ * Google OAuth 2.0 and Supabase Authentication Service.
+ * Provides secure OAuth authentication for DNS_X NOC Workspace.
+ * Zero credentials or sensitive data are ever handled, requested, or stored.
  */
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001/api/v1'
-const API_KEY  = import.meta.env.VITE_API_KEY      ?? 'dnsx_dev_secret_key_8f3d6b2c9e1a4705'
+import { supabase, isSupabaseConfigured } from '../lib/supabase.js'
 
-export async function verifyGoogleAccountWithBackend(email, password) {
-  if (!email || !email.trim()) {
-    throw new Error('Gmail address or Google account ID is required. Input cannot be empty.')
-  }
+/**
+ * Returns the dynamically resolved OAuth redirect URL for local development or production (Vercel).
+ * Automatically adapts between localhost:5173/auth, Vercel production, or custom preview origins.
+ */
+export function getAuthRedirectUrl() {
+  const isLocalhost =
+    typeof window !== 'undefined' &&
+    (window.location?.hostname === 'localhost' ||
+      window.location?.hostname === '127.0.0.1' ||
+      window.location?.origin?.includes('localhost') ||
+      window.location?.origin?.includes('127.0.0.1'))
 
-  if (!password || !password.trim()) {
-    throw new Error('Password for your Google account is required.')
-  }
-
-  if (password.length < 8) {
-    throw new Error('Google account passwords must be at least 8 characters long.')
-  }
-
-  const trimmedEmail = email.trim()
-
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(API_KEY ? { 'X-Api-Key': API_KEY } : {}),
-  }
-
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 10000)
-
-  try {
-    const res = await fetch(`${API_BASE}/auth/verify-google`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ email: trimmedEmail, password }),
-      signal: controller.signal,
-    })
-
-    clearTimeout(timeoutId)
-
-    const data = await res.json()
-
-    if (!res.ok || data.status === 'error' || !data.verified) {
-      const errMsg =
-        data.error ||
-        data.error?.message ||
-        (Array.isArray(data.error?.details) ? data.error.details.map(d => d.msg).join(', ') : null) ||
-        `Verification failed (HTTP ${res.status})`
-      throw new Error(errMsg)
+  // 1. Explicit override via VITE_AUTH_REDIRECT_URL (reject localhost in production)
+  const envRedirect = import.meta.env?.VITE_AUTH_REDIRECT_URL
+  if (envRedirect) {
+    if (isLocalhost) return envRedirect
+    if (!envRedirect.includes('localhost') && !envRedirect.includes('127.0.0.1')) {
+      return envRedirect
     }
+  }
 
-    return data.user
-  } catch (err) {
-    clearTimeout(timeoutId)
-    if (err.name === 'AbortError') {
-      throw new Error('Verification timed out. Please check your network connection and try again.')
+  // 2. Base site URL if specified (reject localhost in production)
+  const siteUrl = import.meta.env?.VITE_SITE_URL
+  if (siteUrl) {
+    const cleaned = siteUrl.replace(/\/$/, '')
+    if (isLocalhost) return `${cleaned}/auth`
+    if (!cleaned.includes('localhost') && !cleaned.includes('127.0.0.1')) {
+      return `${cleaned}/auth`
     }
-    throw err
+  }
+
+  // 3. Browser runtime origin detection
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    const origin = window.location.origin
+    // Local development: localhost or 127.0.0.1
+    if (isLocalhost) {
+      return `${origin}/auth`
+    }
+    // Production (Vercel deployment or custom domain)
+    return `${origin}/auth`
+  }
+
+  // 4. Guaranteed production fallback (strictly for production / build)
+  return 'https://dns-x002.vercel.app/auth'
+}
+
+/**
+ * Initiates the Google OAuth 2.0 flow via Supabase.
+ * Redirects the user to Google's official identity authorization screen.
+ *
+ * @param {Object} [options]
+ * @param {string} [options.loginHint] - Optional email to pre-fill on Google's consent screen
+ * @returns {Promise<{ provider: string, url: string }>}
+ */
+export async function signInWithGoogleOAuth(options = {}) {
+  if (!isSupabaseConfigured) {
+    throw new Error('Supabase authentication is not configured. Please check environment variables.')
+  }
+
+  const redirectTo = getAuthRedirectUrl()
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo,
+      queryParams: {
+        access_type: 'offline',
+        prompt: 'select_account',
+        ...(options.loginHint ? { login_hint: options.loginHint } : {}),
+      },
+    },
+  })
+
+  if (error) {
+    if (
+      error.message?.includes('provider is not enabled') ||
+      error.msg?.includes('provider is not enabled') ||
+      error.error === 'unsupported_provider' ||
+      error.code === 'unsupported_provider'
+    ) {
+      throw new Error(
+        'Google OAuth provider is not yet enabled in Supabase. Please enable Google in Supabase Dashboard (Authentication -> Providers -> Google) and configure your Google Client ID & Secret.'
+      )
+    }
+    throw error
+  }
+
+  return data
+}
+
+/**
+ * Retrieves the currently active Supabase session.
+ */
+export async function getActiveSession() {
+  if (!isSupabaseConfigured) return null
+  const { data: { session }, error } = await supabase.auth.getSession()
+  if (error) {
+    console.error('Failed to retrieve Supabase session:', error)
+    return null
+  }
+  return session
+}
+
+/**
+ * Signs the user out of the current session across Supabase.
+ */
+export async function signOutOAuth() {
+  if (isSupabaseConfigured) {
+    await supabase.auth.signOut().catch(() => {})
   }
 }

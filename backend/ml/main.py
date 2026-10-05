@@ -75,7 +75,7 @@ def classify(request: dict) -> dict:
     # Outage risk (0–100) derived from anomaly score + feature magnitudes
     outage_risk = _compute_outage_risk(fv, anomaly_score)
 
-    dominant_class = max(probs, key=probs.get)
+    dominant_class = max(probs, key=lambda k: probs[k])
     confidence = probs[dominant_class]
 
     return {

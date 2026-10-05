@@ -19,6 +19,7 @@ dist-ssr
 
 # Editor directories and files
 .vscode/*
+!.vscode/settings.json
 !.vscode/extensions.json
 .idea
 .DS_Store
@@ -28,5 +29,11 @@ dist-ssr
 *.sln
 *.sw?
 
+# Deployment
 .vercel
-.env*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/

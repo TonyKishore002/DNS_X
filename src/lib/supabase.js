@@ -7,9 +7,9 @@
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl =
-  import.meta.env.VITE_SUPABASE_URL || 'https://megstikozgcqazmopkcz.supabase.co'
+  import.meta.env?.VITE_SUPABASE_URL || 'https://megstikozgcqazmopkcz.supabase.co'
 const supabaseAnonKey =
-  import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_j6HzTMVfNgPXKK-MLLiV_Q_WV0HR_hA'
+  import.meta.env?.VITE_SUPABASE_ANON_KEY || 'sb_publishable_j6HzTMVfNgPXKK-MLLiV_Q_WV0HR_hA'
 
 export const isSupabaseConfigured = Boolean(
   supabaseUrl &&
@@ -20,8 +20,10 @@ export const isSupabaseConfigured = Boolean(
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    persistSession: false,
-    autoRefreshToken: false,
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    flowType: 'pkce',
   },
 })
 

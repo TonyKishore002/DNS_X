@@ -34,9 +34,17 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 export async function verifyDatabaseConnection() {
   try {
     const { error } = await supabase.from('system_settings').select('key').limit(1)
-    if (error && error.code !== 'PGRST116' && error.code !== 'PGRST205') {
+    if (error) {
+      if (error.code === 'PGRST205') {
+        logger.info('Supabase database connected (system_settings table pending migration; in-memory telemetry buffer active)')
+        return
+      }
+      if (error.code === 'PGRST116') {
+        logger.info('Database connected successfully')
+        return
+      }
       if (process.env.DNS_X_SIMULATION === 'true' || process.env.NODE_ENV !== 'production') {
-        logger.warn(`Database connection warning: ${error.message}. Running in simulation/in-memory mode.`)
+        logger.warn(`Database connection warning: ${error.message}. In-memory telemetry buffer active.`)
         return
       }
       throw new Error(`Database connection failed: ${error.message}`)
@@ -44,7 +52,7 @@ export async function verifyDatabaseConnection() {
     logger.info('Database connected successfully')
   } catch (err) {
     if (process.env.DNS_X_SIMULATION === 'true' || process.env.NODE_ENV !== 'production') {
-      logger.warn({ err: err.message }, 'Database connection could not be established. Running in simulation/in-memory mode.')
+      logger.warn({ err: err.message }, 'Database connection could not be established. In-memory telemetry buffer active.')
       return
     }
     throw err

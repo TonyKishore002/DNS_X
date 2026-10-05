@@ -1,11 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
-  AlertTriangle,
-  CheckCircle2,
   Lightbulb,
-  ShieldCheck,
   ArrowRight,
-  ExternalLink,
 } from 'lucide-react'
 import useDNSState from '../../hooks/useDNSState'
 import { getRecommendation } from '../../services/aiService'
@@ -13,14 +9,12 @@ import { getRecommendation } from '../../services/aiService'
 function AIRecommendation() {
   const { ai, selectedIncident } = useDNSState()
   const [recommendations, setRecommendations] = useState([])
-  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     let isCancelled = false
 
     async function fetchIncidentRecommendations() {
       if (selectedIncident?.id) {
-        setLoading(true)
         try {
           const recData = await getRecommendation(selectedIncident.id)
           if (!isCancelled && recData?.actions && Array.isArray(recData.actions)) {

@@ -9,7 +9,6 @@ import {
 
 function AIOverview() {
   const anomalyScore = 0.00
-  const baseline = 'ESTABLISHED'
   const evidenceState = 'OBSERVED HEALTHY'
 
   return (

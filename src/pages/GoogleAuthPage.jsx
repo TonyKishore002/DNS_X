@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { ShieldCheck, Lock, CheckCircle2, ChevronRight, ArrowLeft, AlertCircle, Eye, EyeOff, KeyRound } from 'lucide-react'
+import { ShieldCheck, Lock, CheckCircle2, ChevronRight, ArrowLeft, AlertCircle } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import DotField from '../components/ui/DotField'
 
@@ -28,71 +28,38 @@ function GoogleLogo({ className = 'h-5 w-5' }) {
 }
 
 function GoogleAuthPage() {
-  const { signInWithGoogle, isAuthenticating, authError } = useAuth()
-  const [googleEmail, setGoogleEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
+  const { user, signInWithGoogle, isAuthenticating, authError, isLoading } = useAuth()
+  const [loginHint, setLoginHint] = useState('')
   const [clientError, setClientError] = useState(null)
-  const [isSuccess, setIsSuccess] = useState(false)
-  const [verifiedEmail, setVerifiedEmail] = useState('')
+  const isSuccess = Boolean(user)
   const navigate = useNavigate()
 
-  const handleVerifyAndSubmit = async (e) => {
+  // Automatically navigate to gated NOC workspace when user is authenticated
+  useEffect(() => {
+    if (user) {
+      const timer = setTimeout(() => {
+        navigate('/noc', { replace: true })
+      }, 500)
+      return () => clearTimeout(timer)
+    }
+  }, [user, navigate])
+
+  const handleOAuthSignIn = async (e) => {
     e?.preventDefault()
     setClientError(null)
 
-    const trimmedEmail = googleEmail.trim()
-    const trimmedPassword = password.trim()
+    const trimmedHint = loginHint.trim()
 
-    // 1. Mandatory empty input verification check for Gmail ID
-    if (!trimmedEmail) {
-      setClientError('Gmail address or Google account ID is required. Input cannot be empty.')
-      return
-    }
-
-    // 2. Syntax & completeness check
-    if (!trimmedEmail.includes('@')) {
-      setClientError('Please enter a complete Gmail address (e.g. username@gmail.com).')
-      return
-    }
-
-    const [local, domain] = trimmedEmail.split('@')
-    if (!local || !domain) {
-      setClientError('Incomplete email format. Please provide a valid username and domain.')
-      return
-    }
-
-    if (domain.toLowerCase() === 'gmail.com' || domain.toLowerCase() === 'googlemail.com') {
-      const cleanUser = local.replace(/\./g, '')
-      if (cleanUser.length < 6) {
-        setClientError('Google account username must be at least 6 characters long.')
-        return
-      }
-    }
-
-    // 3. Mandatory password verification check
-    if (!trimmedPassword) {
-      setClientError('Password of the Google account is required.')
-      return
-    }
-
-    if (trimmedPassword.length < 8) {
-      setClientError('Invalid password. Google account passwords must be at least 8 characters long.')
+    // Validate email syntax if user voluntarily provided a login hint
+    if (trimmedHint && !trimmedHint.includes('@')) {
+      setClientError('Please enter a valid Google email format (e.g. username@gmail.com).')
       return
     }
 
     try {
-      // 4. Real live DNS & Google Account verification through backend
-      const user = await signInWithGoogle(trimmedEmail, trimmedPassword)
-      setVerifiedEmail(user.email)
-      setIsSuccess(true)
-
-      // 5. Direct transition to NOC WORKSPACE GATED after verification
-      setTimeout(() => {
-        navigate('/noc', { replace: true })
-      }, 500)
+      await signInWithGoogle({ email: trimmedHint })
     } catch (err) {
-      setClientError(err.message || 'Google account verification failed.')
+      setClientError(err.message || 'Google OAuth authentication failed. Please try again.')
     }
   }
 
@@ -107,7 +74,7 @@ function GoogleAuthPage() {
         <div className="absolute -top-[5%] right-[10%] h-[500px] w-[500px] rounded-full bg-sky-500/06 blur-[150px]" />
         <div className="absolute top-[35%] left-[25%] h-[600px] w-[600px] rounded-full bg-indigo-500/04 blur-[160px]" />
         <div className="absolute bottom-[5%] right-[15%] h-[600px] w-[600px] rounded-full bg-cyan-500/05 blur-[170px]" />
-        
+
         {/* React Bits DotField Interactive Background */}
         <div className="absolute inset-0">
           <DotField
@@ -143,7 +110,7 @@ function GoogleAuthPage() {
 
           <span className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-0.5 text-[10px] font-mono text-[#9bb8c7]">
             <span className="h-1.5 w-1.5 rounded-full bg-cyan-400/70 shadow-[0_0_4px_rgba(34,211,238,0.3)]" />
-            REAL GATE
+            NOC GATEWAY
           </span>
         </div>
 
@@ -161,7 +128,7 @@ function GoogleAuthPage() {
           </div>
 
           <h1 className="mt-2 text-2xl sm:text-3xl font-bold tracking-tight text-white font-sans">
-            Google Authentication
+            Google Identity Verification
           </h1>
 
           <p className="mt-2 text-[13px] leading-relaxed text-[#9cb1bc]">
@@ -177,130 +144,66 @@ function GoogleAuthPage() {
           </div>
         )}
 
-        {/* Real Google Account & Password Form */}
-        <form onSubmit={handleVerifyAndSubmit} className="mt-6 space-y-4">
-          {/* Field 1: Gmail ID / Account Email */}
+        {/* Official Google OAuth Form */}
+        <form onSubmit={handleOAuthSignIn} className="mt-6 space-y-4">
+          {/* Optional Login Hint Field */}
           <div>
             <div className="flex items-center justify-between px-1 text-[10px] font-mono uppercase tracking-[0.16em] text-[#7d95a2] mb-1.5">
-              <span>GMAIL ID / GOOGLE ACCOUNT</span>
+              <span>GOOGLE ACCOUNT (OPTIONAL)</span>
               <span className="flex items-center gap-1 text-emerald-400">
                 <ShieldCheck size={11} />
-                VERIFIED ID
+                SECURE OAUTH 2.0
               </span>
             </div>
 
             <div className="relative">
               <input
                 type="email"
-                value={googleEmail}
+                value={loginHint}
                 onChange={(e) => {
-                  setGoogleEmail(e.target.value)
+                  setLoginHint(e.target.value)
                   if (clientError) setClientError(null)
                 }}
-                placeholder="username@gmail.com"
-                disabled={isAuthenticating || isSuccess}
+                placeholder="operator@gmail.com (or leave blank to choose on Google)"
+                disabled={isAuthenticating || isLoading || isSuccess}
                 className={`w-full rounded-2xl border bg-black/40 px-4 py-3 text-[14px] text-white placeholder-white/25 transition-all focus:outline-none focus:ring-1 ${
-                  activeError && (!googleEmail.trim() || clientError?.includes('email') || clientError?.includes('username'))
+                  activeError && clientError?.includes('email')
                     ? 'border-red-500/50 focus:border-red-400 focus:ring-red-400/30'
                     : 'border-white/10 focus:border-cyan-400/50 focus:ring-cyan-400/20'
                 }`}
               />
-              {googleEmail && !activeError && (
-                <span className="absolute right-3.5 top-3 text-[10px] font-mono text-[#9bb8c7] bg-white/[0.06] border border-white/10 px-2 py-0.5 rounded-full">
-                  ENTERED
-                </span>
-              )}
             </div>
-
-            {/* Quick Domain Suffix Helpers */}
-            <div className="flex items-center gap-2 mt-2">
-              <span className="text-[10px] font-mono text-[#718a96] uppercase">QUICK DOMAINS:</span>
-              <button
-                type="button"
-                onClick={() => {
-                  const user = googleEmail.split('@')[0] || ''
-                  setGoogleEmail(user ? `${user}@gmail.com` : '@gmail.com')
-                }}
-                className="text-[10px] font-mono text-[#9bb8c7] hover:text-white border border-white/10 bg-white/[0.03] px-2 py-0.5 rounded-md hover:bg-white/[0.08] transition-colors cursor-pointer"
-              >
-                @gmail.com
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const user = googleEmail.split('@')[0] || ''
-                  setGoogleEmail(user ? `${user}@google.com` : '@google.com')
-                }}
-                className="text-[10px] font-mono text-[#9bb8c7] hover:text-white border border-white/10 bg-white/[0.03] px-2 py-0.5 rounded-md hover:bg-white/[0.08] transition-colors cursor-pointer"
-              >
-                @google.com
-              </button>
-            </div>
+            <p className="mt-1.5 px-1 text-[11px] text-[#718a96]">
+              Optional login hint. You can also select or switch accounts directly on the Google consent page.
+            </p>
           </div>
 
-          {/* Field 2: Google Account Password (Required) */}
-          <div>
-            <div className="flex items-center justify-between px-1 text-[10px] font-mono uppercase tracking-[0.16em] text-[#7d95a2] mb-1.5">
-              <span>GOOGLE ACCOUNT PASSWORD</span>
-              <span className="flex items-center gap-1 text-[#8faab8] font-mono text-[9px]">
-                <KeyRound size={11} />
-                REQUIRED (8+ CHARS)
-              </span>
-            </div>
-
-            <div className="relative">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value)
-                  if (clientError) setClientError(null)
-                }}
-                placeholder="Enter your Google account password"
-                disabled={isAuthenticating || isSuccess}
-                className={`w-full rounded-2xl border bg-black/40 px-4 py-3 pr-11 text-[14px] text-white placeholder-white/25 transition-all focus:outline-none focus:ring-1 ${
-                  activeError && (!password.trim() || clientError?.includes('password') || clientError?.includes('Password'))
-                    ? 'border-red-500/50 focus:border-red-400 focus:ring-red-400/30'
-                    : 'border-white/10 focus:border-cyan-400/50 focus:ring-cyan-400/20'
-                }`}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3.5 top-3 text-white/50 hover:text-white transition-colors cursor-pointer"
-                title={showPassword ? 'Hide password' : 'Show password'}
-              >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
-          </div>
-
-          {/* Verification Protocol Note */}
+          {/* Security Protocol Note */}
           <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3 text-[11px] font-mono text-[#8fa6b0] leading-relaxed">
-            <span className="text-white/90 font-semibold">Security Check:</span> Both verified Gmail ID and password (8+ characters) are required to authenticate before granting access to NOC WORKSPACE GATED.
+            <span className="text-white/90 font-semibold">Security Notice:</span> Authentication is handled directly via official Google OAuth. DNS_X never accesses, requests, or stores user credentials.
           </div>
 
-          {/* Primary Action Button */}
+          {/* Primary Action Button: Continue with Google */}
           <div className="pt-2 space-y-3.5">
             <button
               type="submit"
-              disabled={isAuthenticating || isSuccess}
+              disabled={isAuthenticating || isLoading || isSuccess}
               className="group relative flex h-13 w-full items-center justify-center gap-3 rounded-2xl border border-white/20 bg-white text-gray-950 font-medium text-[14.5px] shadow-[0_4px_20px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.6)] transition-all duration-200 hover:bg-[#f8faff] active:scale-[0.99] disabled:opacity-75 cursor-pointer"
             >
               {isSuccess ? (
                 <div className="flex items-center gap-2.5 text-emerald-700 font-semibold">
                   <CheckCircle2 size={18} className="text-emerald-600 animate-in zoom-in" />
-                  <span>Verified {verifiedEmail} · Entering NOC...</span>
+                  <span>Verified {user?.email || 'Google Account'} · Entering NOC...</span>
                 </div>
-              ) : isAuthenticating ? (
+              ) : isAuthenticating || isLoading ? (
                 <div className="flex items-center gap-2.5 text-gray-800">
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
-                  <span>Verifying Google Credentials via DNS MX...</span>
+                  <span>{isLoading ? 'Verifying Google Identity...' : 'Connecting to Google OAuth...'}</span>
                 </div>
               ) : (
                 <>
                   <GoogleLogo className="h-5 w-5" />
-                  <span>Authenticate & Enter NOC Workspace</span>
+                  <span>Continue with Google</span>
                   <ChevronRight size={17} className="text-gray-400 transition-transform group-hover:translate-x-0.5" />
                 </>
               )}
@@ -309,7 +212,7 @@ function GoogleAuthPage() {
             {/* Direct Gated Target Note */}
             <div className="flex items-center justify-center gap-2 text-[11px] text-[#7d95a2] font-mono">
               <Lock size={12} className="text-amber-400/80" />
-              <span>Target on verification:</span>
+              <span>Target on authorization:</span>
               <span className="text-[#9bb8c7] font-semibold uppercase">NOC WORKSPACE GATED</span>
             </div>
           </div>
@@ -323,9 +226,9 @@ function GoogleAuthPage() {
               TLS 1.3 SECURE
             </span>
             <span>·</span>
-            <span>REAL GMAIL & PASSWORD</span>
+            <span>GOOGLE OAUTH 2.0</span>
             <span>·</span>
-            <span>ZERO FAKE DATA</span>
+            <span>ZERO CREDENTIAL STORAGE</span>
           </div>
         </div>
       </div>

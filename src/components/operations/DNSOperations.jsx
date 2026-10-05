@@ -16,7 +16,6 @@ function DNSOperations() {
   const dns = useDNSState()
 
   const {
-    status,
     health,
   } = dns.system
 

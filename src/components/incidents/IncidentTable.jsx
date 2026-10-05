@@ -5,7 +5,6 @@ import {
   CircleDot,
   ShieldAlert,
   Check,
-  RotateCcw,
 } from 'lucide-react'
 import useDNSState from '../../hooks/useDNSState'
 
@@ -325,7 +324,6 @@ function Severity({ severity }) {
 }
 
 function IncidentStatus({ status }) {
-  const isInvestigating = status === 'INVESTIGATING' || status === 'OPEN'
   const isAck = status === 'ACKNOWLEDGED'
   const isResolved = status === 'RESOLVED' || status === 'CLOSED'
   const isContained = status === 'CONTAINED' || status === 'OBSERVING'

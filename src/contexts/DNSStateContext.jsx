@@ -824,9 +824,10 @@ export function DNSStateProvider({ children }) {
       return
     }
 
-    // Step 1: Validated
+    // Step 1: Validated & reset all stale metrics from any prior target
+    activeSignalTrackerRef.current.clear()
     setState((prev) => ({
-      ...prev,
+      ...initialBaseState,
       target: {
         ...initialTargetState,
         domain: input,
@@ -843,6 +844,11 @@ export function DNSStateProvider({ children }) {
       measurementHistory: [],
       incidents: [],
       signals: [],
+      selectedIncident: null,
+      connection: {
+        ...prev.connection,
+        mode: 'active_probe',
+      },
     }))
 
     try {
@@ -961,10 +967,11 @@ export function DNSStateProvider({ children }) {
       }))
     } catch (err) {
       console.error('[analyzeTarget] Probe failure:', err)
+      activeSignalTrackerRef.current.clear()
       setState((prev) => ({
-        ...prev,
+        ...initialBaseState,
         target: {
-          ...prev.target,
+          ...initialTargetState,
           domain: input || '',
           cleanDomain: clean,
           state: 'FAILED',
@@ -980,6 +987,10 @@ export function DNSStateProvider({ children }) {
         signals: [],
         measurementHistory: [],
         selectedIncident: null,
+        connection: {
+          ...prev.connection,
+          mode: 'idle',
+        },
       }))
     }
   }, [])

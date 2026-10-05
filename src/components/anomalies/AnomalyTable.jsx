@@ -5,7 +5,6 @@ import {
   CheckCircle2,
   Clock3,
   Network,
-  Server,
   ShieldAlert,
 } from 'lucide-react'
 import useDNSState from '../../hooks/useDNSState'

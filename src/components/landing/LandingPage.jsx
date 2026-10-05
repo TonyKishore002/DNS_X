@@ -6,8 +6,8 @@ function LandingPage() {
   const navigate = useNavigate()
 
   const handleGetStarted = useCallback(() => {
-    // When clicking "Sign In" or "Get Started", directly goes to Google Authentication
-    navigate('/auth')
+    // Navigate directly to NOC Workspace without login
+    navigate('/noc')
   }, [navigate])
 
   // Listen for message events from iframe

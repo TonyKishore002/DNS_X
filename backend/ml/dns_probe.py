@@ -170,11 +170,11 @@ def query_records(domain: str, timeout: float = 2.0) -> dict:
 
 
 def probe_single_auth_ns(domain: str, ns_host: str, timeout: float = 2.0) -> dict:
-    ns_ip = None
+    ns_ip: str | None = None
     try:
         addr_info = socket.getaddrinfo(ns_host, 53, socket.AF_INET, socket.SOCK_DGRAM)
         if addr_info:
-            ns_ip = addr_info[0][4][0]
+            ns_ip = str(addr_info[0][4][0])
     except Exception:
         pass
 
@@ -195,7 +195,7 @@ def probe_single_auth_ns(domain: str, ns_host: str, timeout: float = 2.0) -> dic
         elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
         rcode_name = dns.rcode.to_text(response.rcode())
         status = "ONLINE" if rcode_name in ["NOERROR", "NXDOMAIN"] else "DEGRADED"
-    except dns.exception.Timeout:
+    except (dns.exception.Timeout, TimeoutError):
         elapsed_ms = round(timeout * 1000, 2)
         rcode_name = "TIMEOUT"
         status = "TIMEOUT"
@@ -290,7 +290,7 @@ def run_measurement(domain: str) -> dict:
     for r in rcodes:
         rcode_counts[r] = rcode_counts.get(r, 0) + 1
 
-    dominant_rcode = max(rcode_counts, key=rcode_counts.get) if rcode_counts else "NOERROR"
+    dominant_rcode = max(rcode_counts, key=lambda k: rcode_counts[k]) if rcode_counts else "NOERROR"
 
     # Evidence-based health score:
     # NXDOMAIN is "NAME NOT FOUND", not an infrastructure critical failure

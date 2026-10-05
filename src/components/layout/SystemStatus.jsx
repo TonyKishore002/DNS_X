@@ -8,9 +8,6 @@ function SystemStatus() {
   const isConnecting = dns.connection?.mode === 'connecting'
   const canonical = getCanonicalHealth(dns)
 
-  const statusColor = canonical.color
-  const statusText = canonical.label
-
   return (
     <div className="flex items-center gap-3">
       {/* Live badge */}
@@ -45,7 +42,7 @@ function SystemStatus() {
           </span>
           <span className="text-[#2b414d]">•</span>
           <span className="text-[#556e7b]">SYS:</span>
-          <span className="text-emerald-400 font-semibold">
+          <span className={`${canonical.isSystemOffline ? 'text-amber-400' : 'text-emerald-400'} font-semibold`}>
             {canonical.systemLabel || 'ONLINE'}
           </span>
         </div>
