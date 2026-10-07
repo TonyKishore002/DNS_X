@@ -47,7 +47,7 @@ describe('DNS_X Real DNS Probe Pipeline Tests', () => {
     expect(res.body.data.performance).toHaveProperty('latency')
     expect(res.body.data.traffic).toHaveProperty('isPublicDomain', true)
     expect(res.body.data.traffic.qps).toBeNull()
-  }, 15000)
+  }, 30000)
 
   it('rejects non-existent NXDOMAIN domain with 422 VALIDATION_FAILED', async () => {
     const res = await request(app)
@@ -59,7 +59,7 @@ describe('DNS_X Real DNS Probe Pipeline Tests', () => {
     expect(res.body.ok).toBe(false)
     expect(res.body.error.reason).toBe('NXDOMAIN')
     expect(res.body.error.message).toContain('DNS resolution failed (NXDOMAIN)')
-  }, 20000)
+  }, 30000)
 
   it('manages active target lifecycle via /dns/target', async () => {
     const setRes = await request(app)
@@ -78,5 +78,5 @@ describe('DNS_X Real DNS Probe Pipeline Tests', () => {
     expect(clearRes.status).toBe(200)
     expect(clearRes.body.ok).toBe(true)
     expect(clearRes.body.data.activeTarget).toBeNull()
-  }, 20000)
+  }, 30000)
 })

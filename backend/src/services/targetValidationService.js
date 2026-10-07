@@ -55,7 +55,7 @@ async function checkDnsResolution(domain) {
  * Perform HTTP or HTTPS reachability probe following safe redirects.
  * Server status codes (200, 301, 302, 403, 404, 500, etc.) are valid responses.
  */
-async function checkProtocolReachability(protocol, domain, timeoutMs = 6000) {
+async function checkProtocolReachability(protocol, domain, timeoutMs = 9000) {
   const url = `${protocol}://${domain}`
   try {
     const controller = new AbortController()
@@ -148,9 +148,9 @@ export async function validateTargetBackend(rawTarget) {
   }
 
   // 3. HTTP / HTTPS Reachability Check (Follow redirects; 200, 301, 302, 403, 404, 500 are valid)
-  let httpResult = await checkProtocolReachability('https', cleanDomain, 6000)
+  let httpResult = await checkProtocolReachability('https', cleanDomain, 9000)
   if (!httpResult.reachable) {
-    const httpFallback = await checkProtocolReachability('http', cleanDomain, 6000)
+    const httpFallback = await checkProtocolReachability('http', cleanDomain, 9000)
     if (httpFallback.reachable) {
       httpResult = httpFallback
     }

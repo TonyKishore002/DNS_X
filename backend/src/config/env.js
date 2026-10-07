@@ -89,7 +89,7 @@ export const SUPABASE_SERVICE_ROLE_KEY = optional(
 )
 
 // ── Telemetry ─────────────────────────────────────────────────────────────────
-export const DNS_X_SIMULATION             = optionalBool('DNS_X_SIMULATION', false)
+export const DNS_X_SIMULATION             = optionalBool('DNS_X_SIMULATION', true)
 export const TELEMETRY_FLUSH_INTERVAL_MS  = optionalInt('TELEMETRY_FLUSH_INTERVAL_MS', 5000)
 export const METRIC_WINDOWS               = optional('METRIC_WINDOWS', '1m,5m,1h')
   .split(',')
