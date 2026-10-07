@@ -4,6 +4,7 @@ import {
   getOverview,
   getIncidents,
   getSignals,
+  validateDomainTarget,
   probeDomain,
   setActiveTarget,
   clearActiveTarget,
@@ -345,6 +346,7 @@ export function DNSStateProvider({ children }) {
   const lastLiveMessageTs = useRef(0)
   const measurementHistoryRef = useRef([])
   const activeSignalTrackerRef = useRef(new Map())
+  const inFlightTargetRef = useRef(null)
 
   // Keep ref synchronized
   useEffect(() => {
@@ -803,29 +805,45 @@ export function DNSStateProvider({ children }) {
   // ── Target Lifecycle Management ─────────────────────────────────────────────
   const analyzeTarget = useCallback(async (input) => {
     const clean = cleanDomainInput(input)
+    const targetKey = clean || input || ''
+
+    if (!targetKey || inFlightTargetRef.current === targetKey) {
+      return
+    }
+    inFlightTargetRef.current = targetKey
+
+    // Data Hygiene: clear previous active target & internal signal tracker
+    clearActiveTarget()
+    activeSignalTrackerRef.current.clear()
 
     if (!clean || !isValidDomain(clean)) {
-      setState((prev) => ({
-        ...prev,
+      inFlightTargetRef.current = null
+      setState({
+        ...initialBaseState,
         target: {
           ...initialTargetState,
           domain: input || '',
           cleanDomain: clean,
           state: 'FAILED',
-          error: `Invalid hostname format "${input || ''}". Please enter a valid fully qualified domain name (e.g. cloudflare.com, google.com).`,
+          status: 'TARGET UNAVAILABLE / VALIDATION FAILED',
+          error: `Invalid target format "${input || ''}". Please enter a valid fully qualified domain name or website URL (e.g. https://example.com or google.com).`,
           analysisSteps: [
             { id: 'validate', label: 'Domain syntax & hostname format validation', status: 'failed' },
-            { id: 'resolve', label: 'DNS resolution (A / AAAA authoritative records)', status: 'pending' },
-            { id: 'nameservers', label: 'Authoritative nameserver discovery', status: 'pending' },
+            { id: 'resolve', label: 'DNS resolution check', status: 'pending' },
+            { id: 'reachability', label: 'HTTP/HTTPS reachability check', status: 'pending' },
             { id: 'health', label: 'Real telemetry & baseline calibration', status: 'pending' },
           ],
         },
-      }))
+        measurementHistory: [],
+        incidents: [],
+        signals: [],
+        selectedIncident: null,
+        connection: { mode: 'idle', isConnected: false, lastUpdated: Date.now() },
+      })
       return
     }
 
-    // Step 1: Validated & reset all stale metrics from any prior target
-    activeSignalTrackerRef.current.clear()
+    // Step 1: Set ANALYZING state & completely clear previous target metrics
     setState((prev) => ({
       ...initialBaseState,
       target: {
@@ -835,9 +853,9 @@ export function DNSStateProvider({ children }) {
         state: 'ANALYZING',
         error: null,
         analysisSteps: [
-          { id: 'validate', label: `Domain format verified: ${clean}`, status: 'complete' },
-          { id: 'resolve', label: `Querying authoritative records for ${clean}...`, status: 'in_progress' },
-          { id: 'nameservers', label: 'Authoritative nameserver discovery & vantage probes', status: 'pending' },
+          { id: 'validate', label: `Validating hostname format: ${clean}`, status: 'in_progress' },
+          { id: 'resolve', label: 'DNS resolution check (A/AAAA records)', status: 'pending' },
+          { id: 'reachability', label: 'HTTP/HTTPS reachability check', status: 'pending' },
           { id: 'health', label: 'Real telemetry & baseline calibration', status: 'pending' },
         ],
       },
@@ -852,44 +870,38 @@ export function DNSStateProvider({ children }) {
     }))
 
     try {
-      // Step 2 & 3: Run real probe via backend or DoH
-      let probeData
-      try {
-        probeData = await probeDomain(clean)
-        // Register active target on backend for WebSocket stream
-        setActiveTarget(clean).catch(() => {})
-      } catch (backendErr) {
-        console.warn('[analyzeTarget] Backend probe failed, attempting client DoH probe:', backendErr.message)
-        probeData = await clientDohProbe(clean)
+      // Step 2: Perform Backend Target Validation (Backend is Source of Truth)
+      const valResult = await validateDomainTarget(input)
+
+      if (!valResult || valResult.valid === false) {
+        throw new Error(valResult?.message || valResult?.error || 'Website unavailable — DNS_X cannot analyze this target.')
       }
 
-      if (!probeData) {
-        throw new Error(`Failed to obtain DNS measurement for "${clean}". Backend and fallback resolvers returned no data.`)
-      }
-
-      const norm = normalizeProbeResponse(probeData, clean)
-
-      // Step 2 complete, Step 3 in progress
+      // Step 3: Backend Validation Succeeded! Proceed to probe & active monitoring
       setState((prev) => ({
         ...prev,
         target: {
           ...prev.target,
-          ips: norm.ips,
-          nameservers: norm.nameservers,
-          records: norm.records,
-          authoritative: norm.authoritative,
-          vantagePoints: norm.vantagePoints,
-          latency: norm.latency,
+          ips: valResult.ips || [],
           analysisSteps: [
             { id: 'validate', label: `Domain format verified: ${clean}`, status: 'complete' },
-            { id: 'resolve', label: `Resolved authoritative records (${norm.ips.slice(0, 2).join(', ') || 'OK'})`, status: 'complete' },
-            { id: 'nameservers', label: `Probed ${norm.vantagePoints.length} recursive vantage points + ${norm.authoritative.length} NS servers`, status: 'complete' },
+            { id: 'resolve', label: `DNS resolution verified (${(valResult.ips || []).slice(0, 2).join(', ') || 'A/AAAA resolved'})`, status: 'complete' },
+            { id: 'reachability', label: `Reachability verified via ${valResult.protocol?.toUpperCase() || 'HTTPS'} (Status ${valResult.httpStatus || 200})`, status: 'complete' },
             { id: 'health', label: 'Calibrating target telemetry baseline...', status: 'in_progress' },
           ],
         },
       }))
 
-      await new Promise((r) => setTimeout(r, 300))
+      await new Promise((r) => setTimeout(r, 150))
+
+      const probeData = await probeDomain(input)
+      setActiveTarget(input)
+
+      if (!probeData) {
+        throw new Error('Website unavailable — DNS_X cannot analyze this target.')
+      }
+
+      const norm = normalizeProbeResponse(probeData, clean)
 
       const initialSample = {
         timestamp: norm.timestamp,
@@ -900,7 +912,7 @@ export function DNSStateProvider({ children }) {
         vantagePoints: norm.vantagePoints,
       }
 
-      // Step 4: Complete -> Transition to ACTIVE with verified normalized data
+      // Step 4: Complete -> Transition to ACTIVE with verified real telemetry
       setState((prev) => ({
         ...prev,
         target: {
@@ -909,7 +921,7 @@ export function DNSStateProvider({ children }) {
           cleanDomain: clean,
           state: 'ACTIVE',
           resolvedAt: norm.timestamp,
-          ips: norm.ips,
+          ips: norm.ips.length > 0 ? norm.ips : (valResult.ips || []),
           nameservers: norm.nameservers,
           records: norm.records,
           authoritative: norm.authoritative,
@@ -917,8 +929,8 @@ export function DNSStateProvider({ children }) {
           latency: norm.latency,
           analysisSteps: [
             { id: 'validate', label: `Domain format verified: ${clean}`, status: 'complete' },
-            { id: 'resolve', label: `Resolved authoritative records (${norm.ips.slice(0, 2).join(', ') || 'OK'})`, status: 'complete' },
-            { id: 'nameservers', label: `Probed ${norm.vantagePoints.length} recursive vantage points + ${norm.authoritative.length} NS servers`, status: 'complete' },
+            { id: 'resolve', label: `DNS resolution verified (${norm.ips.slice(0, 2).join(', ') || 'A/AAAA resolved'})`, status: 'complete' },
+            { id: 'reachability', label: `Reachability verified via ${valResult.protocol?.toUpperCase() || 'HTTPS'} (Status ${valResult.httpStatus || 200})`, status: 'complete' },
             { id: 'health', label: 'Real telemetry baseline session active', status: 'complete' },
           ],
         },
@@ -928,7 +940,7 @@ export function DNSStateProvider({ children }) {
           monitoringStatus: 'MONITORING',
         },
         traffic: {
-          qps: null, // Public domain limitation: global QPS is unavailable
+          qps: null,
           probeRate: norm.vantagePoints.length || 4,
           isPublicDomain: true,
           displayNote: 'GLOBAL QPS UNAVAILABLE (PUBLIC DOMAIN TARGET)',
@@ -938,7 +950,7 @@ export function DNSStateProvider({ children }) {
           median: norm.medianLatency ?? norm.latency,
           mean: norm.meanLatency ?? norm.latency,
           p95: norm.p95,
-          cacheHit: null, // Private metric unavailable on public target
+          cacheHit: null,
           cacheHitNote: 'CACHE HIT RATIO UNAVAILABLE (PUBLIC DOMAIN)',
         },
         errors: {
@@ -966,20 +978,26 @@ export function DNSStateProvider({ children }) {
         },
       }))
     } catch (err) {
-      console.error('[analyzeTarget] Probe failure:', err)
+      console.warn('[analyzeTarget] Validation or probe failed:', err.message)
+      clearActiveTarget()
       activeSignalTrackerRef.current.clear()
-      setState((prev) => ({
+
+      const errorMsg = err.message || 'Website unavailable — DNS_X cannot analyze this target.'
+
+      // Enforce strict Failure State: Zero metrics, AI analysis, signals, incidents, or mock/fallback data
+      setState({
         ...initialBaseState,
         target: {
           ...initialTargetState,
           domain: input || '',
           cleanDomain: clean,
           state: 'FAILED',
-          error: err.message || `DNS resolution failed for "${clean}". Verify network connectivity and domain existence.`,
+          status: 'TARGET UNAVAILABLE / VALIDATION FAILED',
+          error: errorMsg,
           analysisSteps: [
-            { id: 'validate', label: `Domain format verified: ${clean}`, status: 'complete' },
-            { id: 'resolve', label: `DNS resolution failed: ${clean}`, status: 'failed' },
-            { id: 'nameservers', label: 'Authoritative nameserver discovery halted', status: 'pending' },
+            { id: 'validate', label: `Validating hostname format: ${clean}`, status: 'complete' },
+            { id: 'resolve', label: 'Backend target validation failed', status: 'failed' },
+            { id: 'reachability', label: 'HTTP/HTTPS reachability check halted', status: 'pending' },
             { id: 'health', label: 'Telemetry initialization aborted', status: 'pending' },
           ],
         },
@@ -988,10 +1006,13 @@ export function DNSStateProvider({ children }) {
         measurementHistory: [],
         selectedIncident: null,
         connection: {
-          ...prev.connection,
           mode: 'idle',
+          isConnected: false,
+          lastUpdated: Date.now(),
         },
-      }))
+      })
+    } finally {
+      inFlightTargetRef.current = null
     }
   }, [])
 

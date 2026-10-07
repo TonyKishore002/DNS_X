@@ -17,6 +17,7 @@ describe('DNS_X Production Hardening Tests', () => {
   let app
 
   beforeAll(() => {
+    process.env.DNS_X_SIMULATION = 'true'
     app = createApp()
   })
 
@@ -36,6 +37,20 @@ describe('DNS_X Production Hardening Tests', () => {
   })
 
   describe('Authentication Guard', () => {
+    const originalApiKey = process.env.API_KEY
+
+    beforeAll(() => {
+      process.env.API_KEY = 'test_secret_key_123'
+    })
+
+    afterAll(() => {
+      if (originalApiKey !== undefined) {
+        process.env.API_KEY = originalApiKey
+      } else {
+        delete process.env.API_KEY
+      }
+    })
+
     it('rejects requests without API key with 401 UNAUTHORIZED', async () => {
       const res = await request(app).get('/api/v1/overview')
       expect(res.status).toBe(401)
@@ -55,7 +70,7 @@ describe('DNS_X Production Hardening Tests', () => {
     it('allows requests with valid API key', async () => {
       const res = await request(app)
         .get('/api/v1/overview')
-        .set('X-Api-Key', API_KEY)
+        .set('X-Api-Key', 'test_secret_key_123')
       expect(res.status).toBe(200)
       expect(res.body.ok).toBe(true)
     })

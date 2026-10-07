@@ -50,24 +50,45 @@ function ExplainabilityPanel() {
         }
       }
 
-      // 3. Dynamic SHAP factor estimation based on live deviations
-      const latVal = Math.round(Math.max(5, (performance?.latency ?? 18) - 15) * 1.8)
-      const errVal = Math.round((errors?.rate ?? 2) * 5)
-      const qpsVal = Math.round(Math.max(5, Math.abs((traffic?.qps ?? 1000) - (traffic?.averageQps ?? 1000)) / 40))
-      const nxVal  = Math.round((errors?.nxdomain ?? 1.8) * 3)
+      // 3. Dynamic SHAP factor estimation based strictly on live observations
+      const hasRealLatency = typeof performance?.latency === 'number'
+      const hasRealErrors  = typeof errors?.resolutionFailureRate === 'number' || typeof errors?.rate === 'number'
+      const isPublicTarget = traffic?.isPublicDomain !== false || traffic?.qps === null
+
+      const realFactors = []
+      const lat = performance?.latency ?? 0
+      const errRate = errors?.resolutionFailureRate ?? errors?.rate ?? 0
+      const nxRate = errors?.nxDomainRate ?? 0
+
+      if (hasRealLatency && lat > 0) {
+        const latImpact = Math.min(60, Math.round(Math.max(5, lat - 20) * 0.8))
+        realFactors.push({ name: 'Resolver response latency', impact: latImpact, direction: 'increase' })
+      }
+
+      if (hasRealErrors && errRate > 0) {
+        const errImpact = Math.min(50, Math.round(errRate * 4))
+        realFactors.push({ name: 'Resolution failure rate', impact: errImpact, direction: 'increase' })
+      }
+
+      if (nxRate > 0) {
+        const nxImpact = Math.min(30, Math.round(nxRate * 0.5))
+        realFactors.push({ name: 'NXDOMAIN ratio', impact: nxImpact, direction: 'increase' })
+      }
+
+      if (!isPublicTarget && typeof traffic?.qps === 'number' && typeof traffic?.averageQps === 'number') {
+        const qpsDiff = Math.abs(traffic.qps - traffic.averageQps)
+        if (qpsDiff > 10) {
+          realFactors.push({ name: 'Query volume surge', impact: Math.min(40, Math.round(qpsDiff / 50)), direction: 'increase' })
+        }
+      }
+
+      realFactors.sort((a, b) => b.impact - a.impact)
 
       if (!isCancelled) {
-        setFactors([
-          { name: 'Query volume surge', impact: Math.min(45, qpsVal), direction: 'increase' },
-          { name: 'Resolver response latency', impact: Math.min(40, latVal), direction: 'increase' },
-          { name: 'Aggregated DNS error rate', impact: Math.min(30, errVal), direction: 'increase' },
-          { name: 'NXDOMAIN anomaly ratio', impact: Math.min(25, nxVal), direction: 'increase' },
-          { name: 'Cache hit rate deviation', impact: Math.max(5, Math.round(100 - (performance?.cacheHit ?? 91))), direction: 'decrease' },
-        ].sort((a, b) => b.impact - a.impact))
-
+        setFactors(realFactors)
         setNarrative(
-          latVal > 25 || errVal > 15
-            ? 'Assessment driven primarily by elevated resolver response latency and correlated error rates.'
+          realFactors.length > 0
+            ? 'Assessment driven primarily by empirical resolver response latency and observation error rates.'
             : 'Telemetric factors remain aligned with historical operating bounds.'
         )
       }

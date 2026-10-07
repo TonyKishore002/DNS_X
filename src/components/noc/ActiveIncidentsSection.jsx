@@ -190,7 +190,7 @@ function ActiveIncidentsSection() {
                     </div>
 
                     <div className="flex items-center gap-3 text-[#8fa6b0]">
-                      <span>DEVIATION: <strong className="text-amber-300">{sig.deviation_score ? Number(sig.deviation_score).toFixed(1) : sig.z_score ? Number(sig.z_score).toFixed(1) : '3.0'}σ</strong></span>
+                      <span>DEVIATION: <strong className="text-amber-300">{sig.deviation_score ? `${Number(sig.deviation_score).toFixed(1)}σ` : sig.z_score ? `${Number(sig.z_score).toFixed(1)}σ` : 'N/A'}</strong></span>
                       <span>{sig.ts ? new Date(sig.ts).toLocaleTimeString() : 'RECENT'}</span>
                     </div>
                   </div>

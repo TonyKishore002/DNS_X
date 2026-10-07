@@ -10,34 +10,37 @@ function ThreatProbability() {
   const dns = useDNSState()
   const ai = dns.ai || {}
 
-  // Derive probabilities from live model output or telemetry signals
-  let opVal = 78
-  let netVal = 12
-  let secVal = 10
+  const isCalibrating = ai.baseline === 'CALIBRATING' || (dns.measurementHistory && dns.measurementHistory.length < 5) || ai.confidence === null
+
+  // Derive probabilities strictly from live model output or empirical telemetry signals
+  let opVal = 0
+  let netVal = 0
+  let secVal = 0
   let unkVal = 0
 
-  if (ai.operationalProb !== undefined) {
-    opVal = Math.round(ai.operationalProb * 100)
-    netVal = Math.round((ai.networkProb ?? 0.1) * 100)
-    secVal = Math.round((ai.securityProb ?? 0.1) * 100)
-    unkVal = Math.max(0, 100 - (opVal + netVal + secVal))
-  } else {
-    // Dynamic estimate based on current telemetry state
-    const errorRate = dns.errors?.rate ?? 0
-    const latency = dns.performance?.latency ?? 18
-
-    if (ai.severity === 'critical') {
-      secVal = Math.min(85, Math.round(errorRate * 4))
-      netVal = Math.min(30, Math.round(latency * 0.4))
-      opVal = Math.max(5, 100 - (secVal + netVal))
-    } else if (ai.severity === 'warning') {
-      netVal = Math.min(45, Math.round(latency * 0.6))
-      secVal = Math.min(35, Math.round(errorRate * 2))
-      opVal = Math.max(20, 100 - (secVal + netVal))
+  if (!isCalibrating) {
+    if (ai.operationalProb !== undefined && ai.networkProb !== undefined && ai.securityProb !== undefined) {
+      opVal = Math.round(ai.operationalProb * 100)
+      netVal = Math.round(ai.networkProb * 100)
+      secVal = Math.round(ai.securityProb * 100)
+      unkVal = Math.max(0, 100 - (opVal + netVal + secVal))
     } else {
-      opVal = Math.max(85, Math.round(100 - errorRate))
-      secVal = 5
-      netVal = Math.max(5, 100 - (opVal + secVal))
+      const errorRate = dns.errors?.resolutionFailureRate ?? dns.errors?.rate ?? 0
+      const latency = dns.performance?.latency ?? 0
+
+      if (errorRate >= 25 || ai.severity === 'critical') {
+        secVal = Math.min(85, Math.round(errorRate * 3))
+        netVal = Math.min(30, Math.round(latency * 0.2))
+        opVal = Math.max(5, 100 - (secVal + netVal))
+      } else if (latency > 150 || errorRate > 5 || ai.severity === 'warning') {
+        netVal = Math.min(60, Math.round(latency * 0.3))
+        secVal = Math.min(30, Math.round(errorRate * 2))
+        opVal = Math.max(20, 100 - (secVal + netVal))
+      } else {
+        opVal = 100
+        secVal = 0
+        netVal = 0
+      }
     }
   }
 
@@ -80,41 +83,51 @@ function ThreatProbability() {
       />
 
       <div className="space-y-4 p-4">
-        {probabilities.map((item) => {
-          const Icon = item.icon
+        {isCalibrating ? (
+          <div className="flex flex-col items-center justify-center py-4 font-mono text-[10px] text-[#556e7b]">
+            <Activity className="mb-2 animate-pulse text-cyan-400" size={16} />
+            <div>CALIBRATING MODEL BASELINE...</div>
+            <div className="mt-1 text-[8px] text-[#3d535f]">
+              Awaiting minimum real observations
+            </div>
+          </div>
+        ) : (
+          probabilities.map((item) => {
+            const Icon = item.icon
 
-          return (
-            <div key={item.label}>
-              <div className="mb-2 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Icon
-                    size={10}
-                    strokeWidth={1.2}
-                    style={{ color: item.color }}
-                  />
-                  <span className="font-mono text-[10px] text-[#657982]">
-                    {item.label}
+            return (
+              <div key={item.label}>
+                <div className="mb-2 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Icon
+                      size={10}
+                      strokeWidth={1.2}
+                      style={{ color: item.color }}
+                    />
+                    <span className="font-mono text-[10px] text-[#657982]">
+                      {item.label}
+                    </span>
+                  </div>
+
+                  <span className="font-mono text-[11px] text-[#a9bbc2]">
+                    {item.value}%
                   </span>
                 </div>
 
-                <span className="font-mono text-[11px] text-[#a9bbc2]">
-                  {item.value}%
-                </span>
+                <div className="h-1.5 bg-[#111c22]">
+                  <div
+                    className="h-full transition-all duration-700"
+                    style={{
+                      width: `${Math.min(100, item.value)}%`,
+                      backgroundColor: item.color,
+                      boxShadow: `0 0 8px ${item.color}66`,
+                    }}
+                  />
+                </div>
               </div>
-
-              <div className="h-1.5 bg-[#111c22]">
-                <div
-                  className="h-full transition-all duration-700"
-                  style={{
-                    width: `${Math.min(100, item.value)}%`,
-                    backgroundColor: item.color,
-                    boxShadow: `0 0 8px ${item.color}66`,
-                  }}
-                />
-              </div>
-            </div>
-          )
-        })}
+            )
+          })
+        )}
       </div>
     </section>
   )

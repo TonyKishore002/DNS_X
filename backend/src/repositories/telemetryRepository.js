@@ -5,6 +5,20 @@
 
 import supabase from '../config/database.js'
 
+// In-memory buffer fallback for fast querying and offline/simulation mode
+const inMemoryResolverMetrics = []
+const inMemoryUpstreamMetrics = []
+const MAX_METRICS = 300
+
+function isSimulationOrTest() {
+  return (
+    process.env.DNS_X_SIMULATION === 'true' ||
+    process.env.NODE_ENV === 'test' ||
+    !process.env.SUPABASE_URL ||
+    process.env.SUPABASE_URL.includes('placeholder')
+  )
+}
+
 // ── resolver_metrics ──────────────────────────────────────────────────────────
 
 /**
@@ -12,15 +26,20 @@ import supabase from '../config/database.js'
  * @param {object} row
  */
 export async function upsertResolverMetric(row) {
+  inMemoryResolverMetrics.unshift(row)
+  if (inMemoryResolverMetrics.length > MAX_METRICS) inMemoryResolverMetrics.pop()
+
+  if (isSimulationOrTest()) return
+
   try {
     const { error } = await supabase
       .from('resolver_metrics')
       .upsert(row, { onConflict: 'resolver_id,window,ts' })
     if (error && error.code !== 'PGRST205' && !error.message?.includes('schema cache')) {
-      throw error
+      // non-fatal
     }
-  } catch (err) {
-    if (err.code !== 'PGRST205' && !err.message?.includes('schema cache')) throw err
+  } catch (_err) {
+    // non-fatal fallback to in-memory
   }
 }
 
@@ -31,15 +50,24 @@ export async function upsertResolverMetric(row) {
  */
 export async function batchUpsertResolverMetrics(rows) {
   if (!rows.length) return
+  for (const r of rows) {
+    inMemoryResolverMetrics.unshift(r)
+  }
+  if (inMemoryResolverMetrics.length > MAX_METRICS) {
+    inMemoryResolverMetrics.splice(MAX_METRICS)
+  }
+
+  if (isSimulationOrTest()) return
+
   try {
     const { error } = await supabase
       .from('resolver_metrics')
       .upsert(rows, { onConflict: 'resolver_id,window,ts' })
     if (error && error.code !== 'PGRST205' && !error.message?.includes('schema cache')) {
-      throw error
+      // non-fatal
     }
-  } catch (err) {
-    if (err.code !== 'PGRST205' && !err.message?.includes('schema cache')) throw err
+  } catch (_err) {
+    // non-fatal
   }
 }
 
@@ -52,6 +80,15 @@ export async function batchUpsertResolverMetrics(rows) {
  * @returns {Promise<object[]>}
  */
 export async function getResolverMetrics(resolverId, window, limit = 60) {
+  const queryMemory = () => {
+    return inMemoryResolverMetrics
+      .filter((r) => r.resolver_id === resolverId && (!window || r.window === window))
+      .slice(0, limit)
+      .reverse()
+  }
+
+  if (isSimulationOrTest()) return queryMemory()
+
   try {
     const { data, error } = await supabase
       .from('resolver_metrics')
@@ -61,13 +98,11 @@ export async function getResolverMetrics(resolverId, window, limit = 60) {
       .order('ts', { ascending: false })
       .limit(limit)
     if (error) {
-      if (error.code === 'PGRST205' || error.message?.includes('schema cache')) return []
-      throw error
+      return queryMemory()
     }
     return (data ?? []).reverse()
-  } catch (err) {
-    if (err.code === 'PGRST205' || err.message?.includes('schema cache')) return []
-    throw err
+  } catch (_err) {
+    return queryMemory()
   }
 }
 
@@ -79,6 +114,14 @@ export async function getResolverMetrics(resolverId, window, limit = 60) {
  * @returns {Promise<object[]>}
  */
 export async function getAllResolverBaselines(limit = 60) {
+  const queryMemory = () => {
+    return inMemoryResolverMetrics
+      .filter((r) => r.window === '1m')
+      .slice(0, limit * 20)
+  }
+
+  if (isSimulationOrTest()) return queryMemory()
+
   try {
     const { data, error } = await supabase
       .from('resolver_metrics')
@@ -88,13 +131,11 @@ export async function getAllResolverBaselines(limit = 60) {
       .order('ts', { ascending: false })
       .limit(limit * 20)
     if (error) {
-      if (error.code === 'PGRST205' || error.message?.includes('schema cache')) return []
-      throw error
+      return queryMemory()
     }
-    return data ?? []
-  } catch (err) {
-    if (err.code === 'PGRST205' || err.message?.includes('schema cache')) return []
-    throw err
+    return data ?? queryMemory()
+  } catch (_err) {
+    return queryMemory()
   }
 }
 

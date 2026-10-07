@@ -63,7 +63,7 @@ function MainApp() {
       <Route path="/landing" element={<LandingPage />} />
 
       {/* 2. Direct NOC Workspace & Settings Routes (No login required) */}
-      <Route path="/noc" element={<DashboardLayout />} />
+      <Route path="/noc/*" element={<DashboardLayout />} />
       <Route path="/settings" element={<DashboardLayout />} />
 
       {/* 3. Auth & Login redirects directly to NOC workspace */}

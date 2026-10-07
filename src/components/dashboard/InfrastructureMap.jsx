@@ -204,7 +204,7 @@ function InfrastructureMap() {
             icon={Globe2}
             title="DNS GATEWAY"
             subtitle="EDGE / INBOUND"
-            value={`${gateway.qps.toLocaleString()} QPS`}
+            value={dns.traffic?.qps !== null && dns.traffic?.qps !== undefined ? `${dns.traffic.qps.toLocaleString()} QPS` : 'N/A'}
             status={gateway.status}
           />
 
@@ -225,8 +225,8 @@ function InfrastructureMap() {
                     'Resolver-',
                     'R'
                   )}
-                  subtitle={`${resolver.qps.toLocaleString()} QPS`}
-                  value={`${resolver.latency.toFixed(1)}ms`}
+                  subtitle={resolver.qps !== null && resolver.qps !== undefined ? `${resolver.qps.toLocaleString()} QPS` : 'PROBE NODE'}
+                  value={resolver.latency ? `${resolver.latency.toFixed(1)}ms` : 'N/A'}
                   status={resolver.status}
                 />
               ))}
@@ -240,7 +240,7 @@ function InfrastructureMap() {
             icon={Database}
             title="DNS CACHE"
             subtitle="MEMORY / EDGE"
-            value={`${cache.hitRate.toFixed(1)}%`}
+            value={cache.hitRate !== null && cache.hitRate !== undefined ? `${cache.hitRate.toFixed(1)}%` : 'N/A'}
             status={cache.status}
           />
         </div>
@@ -249,17 +249,17 @@ function InfrastructureMap() {
         <div className="mt-4 grid grid-cols-2 border border-[#17313b] bg-[#080f14]/80 sm:grid-cols-4">
           <Telemetry
             label="QUERY RATE"
-            value={`${dns.traffic.qps.toLocaleString()} QPS`}
+            value={dns.traffic?.qps !== null && dns.traffic?.qps !== undefined ? `${dns.traffic.qps.toLocaleString()} QPS` : 'N/A (PUBLIC TARGET)'}
           />
 
           <Telemetry
             label="AVG LATENCY"
-            value={`${dns.performance.latency.toFixed(1)} ms`}
+            value={dns.performance?.latency ? `${dns.performance.latency.toFixed(1)} ms` : 'N/A'}
           />
 
           <Telemetry
             label="CACHE HIT"
-            value={`${cache.hitRate.toFixed(1)}%`}
+            value={cache.hitRate !== null && cache.hitRate !== undefined ? `${cache.hitRate.toFixed(1)}%` : 'N/A (PUBLIC TARGET)'}
           />
 
           <Telemetry

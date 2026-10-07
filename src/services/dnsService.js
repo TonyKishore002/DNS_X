@@ -139,32 +139,44 @@ export async function updateSettings(patch) {
 // ── Real DNS Measurement Probing ─────────────────────────────────────────────
 
 /**
- * POST /api/v1/dns/probe — execute live probe on target domain
- * @param {string} domain
+ * POST /api/v1/dns/validate — perform real target validation (syntax, DNS, HTTP reachability)
+ * @param {string} target
  */
-export async function probeDomain(domain) {
+export async function validateDomainTarget(target) {
+  return apiFetch('/dns/validate', {
+    method: 'POST',
+    body: JSON.stringify({ target }),
+    timeout: 15000,
+  })
+}
+
+/**
+ * POST /api/v1/dns/probe — execute live probe on target domain
+ * @param {string} target
+ */
+export async function probeDomain(target) {
   return apiFetch('/dns/probe', {
     method: 'POST',
-    body: JSON.stringify({ domain }),
+    body: JSON.stringify({ target }),
     timeout: 15000,
   })
 }
 
 /**
  * POST /api/v1/dns/target — register active target for periodic probing
- * @param {string} domain
+ * @param {string} target
  */
-export async function setActiveTarget(domain) {
+export async function setActiveTarget(target) {
   return apiFetch('/dns/target', {
     method: 'POST',
-    body: JSON.stringify({ domain }),
+    body: JSON.stringify({ target }),
   })
 }
 
 /**
  * DELETE /api/v1/dns/target — stop active target probing
  */
-export async function clearActiveTarget() {
+export function clearActiveTarget() {
   return apiFetch('/dns/target', {
     method: 'DELETE',
   })
@@ -189,6 +201,7 @@ export default {
   getSettings,
   updateSettings,
   checkHealth,
+  validateDomainTarget,
   probeDomain,
   setActiveTarget,
   clearActiveTarget,

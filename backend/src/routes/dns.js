@@ -10,35 +10,90 @@ import {
   clearActiveTargetDomain,
   getActiveTargetDomain,
 } from '../services/dnsMeasurementService.js'
+import { validateTargetBackend, normalizeTargetInput } from '../services/targetValidationService.js'
 import { getRecentMeasurements } from '../repositories/dnsMeasurementRepository.js'
 import { success, errors } from '../utils/response.js'
 import logger from '../config/logger.js'
 
-const DOMAIN_FORMAT_REGEX = /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/
-
-function validateDomain(domain) {
-  if (!domain || typeof domain !== 'string') return null
-  const clean = domain.trim().toLowerCase().replace(/^https?:\/\//i, '').split('/')[0].split(':')[0]
-  if (!DOMAIN_FORMAT_REGEX.test(clean)) return null
-  return clean
-}
-
 const router = Router()
 
 /**
+ * POST /api/v1/dns/validate
+ * Perform strict backend-side target validation (syntax -> real DNS resolution -> HTTP/HTTPS reachability).
+ * Body: { target: string } or { domain: string }
+ */
+router.post('/dns/validate', async (req, res, next) => {
+  try {
+    const rawTarget = req.body?.target || req.body?.domain || req.query?.target || req.query?.domain
+    const result = await validateTargetBackend(rawTarget)
+    if (!result.valid) {
+      return res.status(422).json({
+        ok: false,
+        error: {
+          message: result.message || result.error,
+          code: 'VALIDATION_FAILED',
+          reason: result.reason,
+          details: result.details,
+        },
+        data: result,
+      })
+    }
+    return success(res, result)
+  } catch (err) {
+    logger.error({ err: err.message }, 'Failed handling /dns/validate')
+    next(err)
+  }
+})
+
+/**
+ * GET /api/v1/dns/validate?target=...
+ */
+router.get('/dns/validate', async (req, res, next) => {
+  try {
+    const rawTarget = req.query?.target || req.query?.domain
+    const result = await validateTargetBackend(rawTarget)
+    if (!result.valid) {
+      return res.status(422).json({
+        ok: false,
+        error: {
+          message: result.message || result.error,
+          code: 'VALIDATION_FAILED',
+          reason: result.reason,
+          details: result.details,
+        },
+        data: result,
+      })
+    }
+    return success(res, result)
+  } catch (err) {
+    logger.error({ err: err.message }, 'Failed handling GET /dns/validate')
+    next(err)
+  }
+})
+
+/**
  * POST /api/v1/dns/probe
- * Probe a domain in real-time using dnspython and return verified measurements.
- * Body: { domain: string }
+ * Probe a domain in real-time after backend-side validation succeeds.
+ * Body: { target: string }
  */
 router.post('/dns/probe', async (req, res, next) => {
   try {
-    const rawDomain = req.body?.domain || req.query?.domain
-    const cleanDomain = validateDomain(rawDomain)
-    if (!cleanDomain) {
-      return errors.badRequest(res, 'Invalid domain format: must be a valid FQDN (e.g. example.com)')
+    const rawTarget = req.body?.target || req.body?.domain || req.query?.target || req.query?.domain
+    const valResult = await validateTargetBackend(rawTarget)
+    if (!valResult.valid) {
+      return res.status(422).json({
+        ok: false,
+        error: {
+          message: valResult.message || valResult.error,
+          code: 'VALIDATION_FAILED',
+          reason: valResult.reason,
+          details: valResult.details,
+        },
+        data: valResult,
+      })
     }
 
-    const measurement = await measureDomain(cleanDomain)
+    const measurement = await measureDomain(valResult.domain)
     return success(res, measurement)
   } catch (err) {
     logger.error({ err: err.message }, 'Failed handling /dns/probe')
@@ -47,16 +102,26 @@ router.post('/dns/probe', async (req, res, next) => {
 })
 
 /**
- * GET /api/v1/dns/probe?domain=...
+ * GET /api/v1/dns/probe?target=...
  */
 router.get('/dns/probe', async (req, res, next) => {
   try {
-    const domain = req.query?.domain
-    if (!domain || typeof domain !== 'string') {
-      return errors.badRequest(res, 'domain query parameter is required')
+    const rawTarget = req.query?.target || req.query?.domain
+    const valResult = await validateTargetBackend(rawTarget)
+    if (!valResult.valid) {
+      return res.status(422).json({
+        ok: false,
+        error: {
+          message: valResult.message || valResult.error,
+          code: 'VALIDATION_FAILED',
+          reason: valResult.reason,
+          details: valResult.details,
+        },
+        data: valResult,
+      })
     }
 
-    const measurement = await measureDomain(domain)
+    const measurement = await measureDomain(valResult.domain)
     return success(res, measurement)
   } catch (err) {
     logger.error({ err: err.message }, 'Failed handling GET /dns/probe')
@@ -66,19 +131,29 @@ router.get('/dns/probe', async (req, res, next) => {
 
 /**
  * POST /api/v1/dns/target
- * Set active target for continuous backend probing and WebSocket broadcast.
- * Body: { domain: string }
+ * Set active target for continuous backend probing and WebSocket broadcast after validation.
+ * Body: { target: string }
  */
 router.post('/dns/target', async (req, res, next) => {
   try {
-    const rawDomain = req.body?.domain
-    const cleanDomain = validateDomain(rawDomain)
-    if (!cleanDomain) {
-      return errors.badRequest(res, 'Invalid domain format: must be a valid FQDN (e.g. example.com)')
+    const rawTarget = req.body?.target || req.body?.domain
+    const valResult = await validateTargetBackend(rawTarget)
+    if (!valResult.valid) {
+      clearActiveTargetDomain()
+      return res.status(422).json({
+        ok: false,
+        error: {
+          message: valResult.message || valResult.error,
+          code: 'VALIDATION_FAILED',
+          reason: valResult.reason,
+          details: valResult.details,
+        },
+        data: valResult,
+      })
     }
 
-    await setActiveTargetDomain(cleanDomain)
-    return success(res, { activeTarget: cleanDomain, monitoring: true })
+    await setActiveTargetDomain(valResult.domain)
+    return success(res, { activeTarget: valResult.domain, monitoring: true })
   } catch (err) {
     next(err)
   }

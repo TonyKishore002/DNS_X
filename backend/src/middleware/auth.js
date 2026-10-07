@@ -25,8 +25,9 @@ let warnedDevBypass = false
  * @type {import('express').RequestHandler}
  */
 export function requireApiKey(req, res, next) {
+  const key = process.env.API_KEY || API_KEY
   // Skip auth if no key is configured (dev convenience only).
-  if (!apiKeyBuffer) {
+  if (!key) {
     if (IS_PRODUCTION) {
       logger.error('API_KEY is not set in production — all requests will be rejected')
       return errors.internal(res, 'Server misconfiguration: API key not configured')
@@ -37,6 +38,8 @@ export function requireApiKey(req, res, next) {
     }
     return next()
   }
+
+  const currentBuffer = Buffer.from(key, 'utf8')
 
   // Check X-Api-Key header or Authorization: Bearer <key>
   const authHeader = req.headers['authorization']
@@ -49,8 +52,8 @@ export function requireApiKey(req, res, next) {
 
   // Lengths must match before timingSafeEqual to avoid allocation mismatch.
   const match =
-    providedBuffer.length === apiKeyBuffer.length &&
-    timingSafeEqual(providedBuffer, apiKeyBuffer)
+    providedBuffer.length === currentBuffer.length &&
+    timingSafeEqual(providedBuffer, currentBuffer)
 
   if (!match) {
     return errors.unauthorized(res, 'Invalid or missing API key')

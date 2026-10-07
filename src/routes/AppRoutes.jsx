@@ -9,7 +9,7 @@ function AppRoutes() {
     <Routes>
       {/* Unified Network Operations Center */}
       <Route path="/" element={<NOC />} />
-      <Route path="/noc" element={<NOC />} />
+      <Route path="/noc/*" element={<NOC />} />
 
       {/* System Settings */}
       <Route path="/settings" element={<Settings />} />

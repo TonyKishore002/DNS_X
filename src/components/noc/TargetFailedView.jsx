@@ -27,12 +27,12 @@ function TargetFailedView() {
       <div className="mt-4 flex items-center justify-center gap-2">
         <span className={`h-1.5 w-1.5 rounded-full ${isBackendOffline ? 'bg-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.8)]' : 'bg-red-400 shadow-[0_0_8px_rgba(239,68,68,0.8)]'}`} />
         <span className={`font-mono text-[10px] uppercase tracking-[0.2em] ${isBackendOffline ? 'text-amber-400' : 'text-red-400'}`}>
-          {isBackendOffline ? 'MEASUREMENT SYSTEM OFFLINE · TARGET STATE UNKNOWN' : 'RESOLUTION FAILED · NO FABRICATED METRICS'}
+          {isBackendOffline ? 'MEASUREMENT SYSTEM OFFLINE · TARGET STATE UNKNOWN' : (target?.status || 'TARGET UNAVAILABLE / VALIDATION FAILED')}
         </span>
       </div>
 
       <h2 className="mt-2 text-[20px] font-semibold text-[#f5edee]">
-        {isBackendOffline ? 'Telemetry System Offline' : 'Target Analysis Incomplete'}
+        {isBackendOffline ? 'Telemetry System Offline' : 'Website Unavailable'}
       </h2>
 
       <div className={`glass-card mx-auto mt-4 max-w-lg rounded-xl p-4 text-left ${isBackendOffline ? 'border-amber-500/25 bg-amber-950/20' : 'border-red-500/25 bg-red-950/20'}`}>
@@ -40,14 +40,14 @@ function TargetFailedView() {
           {isBackendOffline ? 'SYSTEM STATUS:' : 'ERROR REASON:'}
         </div>
         <p className={`mt-1 font-mono text-[11px] leading-5 ${isBackendOffline ? 'text-[#e2d5b5]' : 'text-[#e5b5b5]'}`}>
-          {target?.error || 'Unable to establish authoritative DNS resolution for the provided target.'}
+          {target?.error || 'Website unavailable — DNS_X cannot analyze this target.'}
         </p>
       </div>
 
       <p className="mx-auto mt-4 max-w-md font-mono text-[10px] text-[#8c6d75]">
         {isBackendOffline
           ? 'DNS_X backend server is unreachable. Target DNS health cannot be verified and remains UNKNOWN until telemetry is restored.'
-          : 'DNS_X enforces telemetry integrity and will not simulate monitoring state for unverified or non-existent domains.'}
+          : 'DNS_X enforces real website reachability with backend validation. No metrics or signals are generated for unavailable targets.'}
       </p>
 
       {/* Actions */}

@@ -19,22 +19,23 @@ describe('DNS_X Real DNS Probe Pipeline Tests', () => {
     clearActiveTargetDomain()
   })
 
-  it('rejects invalid domain format with 400 BAD_REQUEST', async () => {
+  it('rejects invalid domain format with 422 VALIDATION_FAILED', async () => {
     const res = await request(app)
       .post('/api/v1/dns/probe')
       .set('X-Api-Key', API_KEY)
-      .send({ domain: 'invalid domain with spaces @@#' })
+      .send({ target: 'invalid domain with spaces @@#' })
 
-    expect(res.status).toBe(400)
+    expect(res.status).toBe(422)
     expect(res.body.ok).toBe(false)
-    expect(res.body.error.code).toBe('BAD_REQUEST')
+    expect(res.body.error.reason).toBe('SYNTAX_INVALID')
+    expect(res.body.error.message).toContain('Invalid target format')
   })
 
-  it('performs real DNS probe on a valid domain', async () => {
+  it('performs real DNS probe on a valid reachable domain', async () => {
     const res = await request(app)
       .post('/api/v1/dns/probe')
       .set('X-Api-Key', API_KEY)
-      .send({ domain: 'cloudflare.com' })
+      .send({ target: 'https://cloudflare.com' })
 
     expect(res.status).toBe(200)
     expect(res.body.ok).toBe(true)
@@ -48,23 +49,23 @@ describe('DNS_X Real DNS Probe Pipeline Tests', () => {
     expect(res.body.data.traffic.qps).toBeNull()
   }, 15000)
 
-  it('handles NXDOMAIN for non-existent domain gracefully', async () => {
+  it('rejects non-existent NXDOMAIN domain with 422 VALIDATION_FAILED', async () => {
     const res = await request(app)
       .post('/api/v1/dns/probe')
       .set('X-Api-Key', API_KEY)
-      .send({ domain: 'non-existent-test-domain-dnsx-9999.xyz' })
+      .send({ target: 'non-existent-test-domain-dnsx-9999.xyz' })
 
-    expect(res.status).toBe(200)
-    expect(res.body.ok).toBe(true)
-    expect(res.body.data.target).toHaveProperty('domain', 'non-existent-test-domain-dnsx-9999.xyz')
-    expect(['NXDOMAIN', 'SERVFAIL', 'ERROR']).toContain(res.body.data.errors.dominant)
+    expect(res.status).toBe(422)
+    expect(res.body.ok).toBe(false)
+    expect(res.body.error.reason).toBe('NXDOMAIN')
+    expect(res.body.error.message).toContain('DNS resolution failed (NXDOMAIN)')
   }, 20000)
 
   it('manages active target lifecycle via /dns/target', async () => {
     const setRes = await request(app)
       .post('/api/v1/dns/target')
       .set('X-Api-Key', API_KEY)
-      .send({ domain: 'google.com' })
+      .send({ target: 'google.com' })
 
     expect(setRes.status).toBe(200)
     expect(setRes.body.ok).toBe(true)

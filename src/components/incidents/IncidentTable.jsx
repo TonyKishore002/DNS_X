@@ -232,8 +232,8 @@ function MobileIncident({
 }) {
   const severity = (incident.severity || 'medium').toUpperCase()
   const status = (incident.status || 'investigating').toUpperCase()
-  const signalsCount = incident.signals_count ?? incident.signals ?? 1
-  const confidence = incident.confidence ?? 80
+  const signalsCount = incident.signals_count ?? (Array.isArray(incident.signals) ? incident.signals.length : 0)
+  const confidence = incident.confidence !== null && incident.confidence !== undefined ? `${incident.confidence}%` : 'N/A'
   const displayId = incident.id.length > 8 ? incident.id.slice(0, 8).toUpperCase() : incident.id
 
   return (
@@ -247,7 +247,7 @@ function MobileIncident({
             {incident.title}
           </div>
           <div className="mt-1 font-mono text-[9px] text-[#40545e]">
-            {incident.source || 'RESOLVER-02'} · {incident.cause || incident.root_cause_class || 'Operational'}
+            {incident.source || incident.target_domain || 'RESOLVER FLEET'} · {incident.cause || incident.root_cause_class || 'Operational'}
           </div>
         </div>
         <Severity severity={severity} />

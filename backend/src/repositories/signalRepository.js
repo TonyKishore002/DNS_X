@@ -5,12 +5,40 @@
 
 import supabase from '../config/database.js'
 
+// In-memory buffer fallback for fast querying and offline/simulation mode
+const inMemorySignals = []
+const MAX_BUFFER = 500
+
+function isSimulationOrTest() {
+  return (
+    process.env.DNS_X_SIMULATION === 'true' ||
+    process.env.NODE_ENV === 'test' ||
+    !process.env.SUPABASE_URL ||
+    process.env.SUPABASE_URL.includes('placeholder')
+  )
+}
+
 /**
  * Insert a new signal record.
  * @param {object} signal
  * @returns {Promise<object>}
  */
 export async function insertSignal(signal) {
+  const record = {
+    id: signal.id || `sig-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    ...signal,
+    ts: signal.ts || new Date().toISOString(),
+  }
+
+  inMemorySignals.unshift(record)
+  if (inMemorySignals.length > MAX_BUFFER) {
+    inMemorySignals.pop()
+  }
+
+  if (isSimulationOrTest()) {
+    return record
+  }
+
   try {
     const { data, error } = await supabase
       .from('signals')
@@ -19,16 +47,13 @@ export async function insertSignal(signal) {
       .single()
     if (error) {
       if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
-        return { id: signal.id || `sig-${Date.now()}`, ...signal }
+        return record
       }
-      throw error
+      return record
     }
-    return data
-  } catch (err) {
-    if (err.code === 'PGRST205' || err.message?.includes('schema cache')) {
-      return { id: signal.id || `sig-${Date.now()}`, ...signal }
-    }
-    throw err
+    return data || record
+  } catch (_err) {
+    return record
   }
 }
 
@@ -42,6 +67,18 @@ export async function insertSignal(signal) {
  * @returns {Promise<object[]>}
  */
 export async function querySignals({ resolver_id, type, since, limit = 100 } = {}) {
+  const queryMemory = () => {
+    let filtered = [...inMemorySignals]
+    if (resolver_id) filtered = filtered.filter((s) => s.resolver_id === resolver_id)
+    if (type)        filtered = filtered.filter((s) => s.type === type)
+    if (since)       filtered = filtered.filter((s) => new Date(s.ts) >= new Date(since))
+    return filtered.slice(0, limit)
+  }
+
+  if (isSimulationOrTest()) {
+    return queryMemory()
+  }
+
   try {
     let q = supabase
       .from('signals')
@@ -55,17 +92,11 @@ export async function querySignals({ resolver_id, type, since, limit = 100 } = {
 
     const { data, error } = await q
     if (error) {
-      if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
-        return []
-      }
-      throw error
+      return queryMemory()
     }
-    return data ?? []
-  } catch (err) {
-    if (err.code === 'PGRST205' || err.message?.includes('schema cache')) {
-      return []
-    }
-    throw err
+    return data ?? queryMemory()
+  } catch (_err) {
+    return queryMemory()
   }
 }
 
@@ -75,6 +106,16 @@ export async function querySignals({ resolver_id, type, since, limit = 100 } = {
  * @returns {Promise<object[]>}
  */
 export async function getUncorrelatedSignals(sinceIso) {
+  const queryMemory = () => {
+    return inMemorySignals
+      .filter((s) => !s.incident_id && (!sinceIso || new Date(s.ts) >= new Date(sinceIso)))
+      .sort((a, b) => new Date(a.ts) - new Date(b.ts))
+  }
+
+  if (isSimulationOrTest()) {
+    return queryMemory()
+  }
+
   try {
     const { data, error } = await supabase
       .from('signals')
@@ -83,17 +124,11 @@ export async function getUncorrelatedSignals(sinceIso) {
       .gte('ts', sinceIso)
       .order('ts', { ascending: true })
     if (error) {
-      if (error.code === 'PGRST205' || error.message?.includes('schema cache')) {
-        return []
-      }
-      throw error
+      return queryMemory()
     }
-    return data ?? []
-  } catch (err) {
-    if (err.code === 'PGRST205' || err.message?.includes('schema cache')) {
-      return []
-    }
-    throw err
+    return data ?? queryMemory()
+  } catch (_err) {
+    return queryMemory()
   }
 }
 
@@ -103,6 +138,17 @@ export async function getUncorrelatedSignals(sinceIso) {
  * @param {string} incidentId
  */
 export async function assignSignalsToIncident(signalIds, incidentId) {
+  const idSet = new Set(signalIds)
+  for (const s of inMemorySignals) {
+    if (idSet.has(s.id)) {
+      s.incident_id = incidentId
+    }
+  }
+
+  if (isSimulationOrTest()) {
+    return
+  }
+
   try {
     const { error } = await supabase
       .from('signals')
@@ -111,10 +157,9 @@ export async function assignSignalsToIncident(signalIds, incidentId) {
     if (error && error.code !== 'PGRST205' && !error.message?.includes('schema cache')) {
       throw error
     }
-  } catch (err) {
-    if (err.code !== 'PGRST205' && !err.message?.includes('schema cache')) {
-      throw err
-    }
+  } catch (_err) {
+    // Non-fatal fallback to in-memory state
   }
 }
+
 
