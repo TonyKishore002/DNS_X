@@ -20,12 +20,15 @@ const DOMAIN_FORMAT_REGEX = /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.
 export function normalizeTargetInput(raw) {
   if (!raw || typeof raw !== 'string') return ''
   let cleaned = raw.trim().toLowerCase()
-  cleaned = cleaned.replace(/^https?:\/\//i, '')
+  cleaned = cleaned.replace(/^https?:\/\//i, '').replace(/^\/\//, '')
+  if (cleaned.includes('@')) {
+    cleaned = cleaned.split('@').pop()
+  }
   cleaned = cleaned.split('/')[0]
   cleaned = cleaned.split('?')[0]
   cleaned = cleaned.split('#')[0]
   cleaned = cleaned.split(':')[0]
-  return cleaned.replace(/\.$/, '')
+  return cleaned.replace(/\.+$/, '')
 }
 
 /**
@@ -112,18 +115,19 @@ async function checkProtocolReachability(protocol, domain, timeoutMs = 9000) {
  */
 export async function validateTargetBackend(rawTarget) {
   const cleanDomain = normalizeTargetInput(rawTarget)
+  const defaultUnavailableMsg = 'Website unavailable — DNS_X cannot analyze this target.'
 
   // 1. Syntax Validation
   if (!cleanDomain || !DOMAIN_FORMAT_REGEX.test(cleanDomain) || cleanDomain.length > 253) {
-    const message = `Invalid target format "${rawTarget || ''}". Please enter a valid fully qualified domain name or URL (e.g. https://example.com or google.com).`
+    const details = `Invalid target format "${rawTarget || ''}". Please enter a valid fully qualified domain name or URL (e.g. https://example.com or google.com).`
     return {
       valid: false,
       target: rawTarget || '',
       domain: cleanDomain || rawTarget || '',
       reason: 'SYNTAX_INVALID',
-      message,
-      error: message,
-      details: 'Invalid domain hostname syntax format.',
+      message: defaultUnavailableMsg,
+      error: defaultUnavailableMsg,
+      details,
     }
   }
 
@@ -131,7 +135,7 @@ export async function validateTargetBackend(rawTarget) {
   const dnsResult = await checkDnsResolution(cleanDomain)
   if (!dnsResult.ok) {
     const reason = dnsResult.errorType || 'NXDOMAIN'
-    const message = reason === 'NXDOMAIN'
+    const details = reason === 'NXDOMAIN'
       ? `DNS resolution failed (NXDOMAIN): Target domain "${cleanDomain}" does not exist.`
       : `DNS resolution failed (${dnsResult.code}): Domain "${cleanDomain}" has no address records.`
 
@@ -141,9 +145,9 @@ export async function validateTargetBackend(rawTarget) {
       target: rawTarget,
       domain: cleanDomain,
       reason,
-      message,
-      error: message,
-      details: `Authoritative DNS resolution returned ${dnsResult.code}.`,
+      message: defaultUnavailableMsg,
+      error: defaultUnavailableMsg,
+      details,
     }
   }
 
@@ -158,9 +162,9 @@ export async function validateTargetBackend(rawTarget) {
 
   if (!httpResult.reachable) {
     const reason = httpResult.errorType || 'CONNECTION_FAILURE'
-    const message = reason === 'TIMEOUT'
-      ? `HTTP/HTTPS request timed out: Web server at "${cleanDomain}" failed to respond within 6 seconds.`
-      : `Connection failed: Web server at "${cleanDomain}" is unreachable over HTTP/HTTPS.`
+    const details = reason === 'TIMEOUT'
+      ? `HTTP/HTTPS request timed out: Web server at "${cleanDomain}" failed to respond within 9 seconds.`
+      : `Connection failed: Web server at "${cleanDomain}" is unreachable over HTTP/HTTPS (${httpResult.details}).`
 
     logger.warn({ domain: cleanDomain, reason, details: httpResult.details }, 'Target validation failed: Website unreachable')
     return {
@@ -168,9 +172,9 @@ export async function validateTargetBackend(rawTarget) {
       target: rawTarget,
       domain: cleanDomain,
       reason,
-      message,
-      error: message,
-      details: `HTTP reachability failed (${reason}): ${httpResult.details}`,
+      message: defaultUnavailableMsg,
+      error: defaultUnavailableMsg,
+      details,
     }
   }
 

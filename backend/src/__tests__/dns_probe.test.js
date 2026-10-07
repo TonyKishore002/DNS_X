@@ -28,7 +28,8 @@ describe('DNS_X Real DNS Probe Pipeline Tests', () => {
     expect(res.status).toBe(422)
     expect(res.body.ok).toBe(false)
     expect(res.body.error.reason).toBe('SYNTAX_INVALID')
-    expect(res.body.error.message).toContain('Invalid target format')
+    expect(res.body.error.message).toBe('Website unavailable — DNS_X cannot analyze this target.')
+    expect(res.body.error.details).toContain('Invalid target format')
   })
 
   it('performs real DNS probe on a valid reachable domain', async () => {
@@ -58,7 +59,20 @@ describe('DNS_X Real DNS Probe Pipeline Tests', () => {
     expect(res.status).toBe(422)
     expect(res.body.ok).toBe(false)
     expect(res.body.error.reason).toBe('NXDOMAIN')
-    expect(res.body.error.message).toContain('DNS resolution failed (NXDOMAIN)')
+    expect(res.body.error.message).toBe('Website unavailable — DNS_X cannot analyze this target.')
+    expect(res.body.error.details).toContain('DNS resolution failed (NXDOMAIN)')
+  }, 30000)
+
+  it('rejects unreachable domain with 422 VALIDATION_FAILED', async () => {
+    const res = await request(app)
+      .post('/api/v1/dns/probe')
+      .set('X-Api-Key', API_KEY)
+      .send({ target: 'ns1.google.com' })
+
+    expect(res.status).toBe(422)
+    expect(res.body.ok).toBe(false)
+    expect(res.body.error.message).toBe('Website unavailable — DNS_X cannot analyze this target.')
+    expect(['TIMEOUT', 'CONNECTION_FAILURE']).toContain(res.body.error.reason)
   }, 30000)
 
   it('manages active target lifecycle via /dns/target', async () => {

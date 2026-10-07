@@ -115,210 +115,6 @@ function isValidDomain(domain) {
 }
 
 /**
- * Client-side DoH fallback probe if backend API is offline
- */
-async function clientDohProbe(cleanDomain) {
-  const aUrl = `https://dns.google/resolve?name=${encodeURIComponent(cleanDomain)}&type=A`
-  const nsUrl = `https://dns.google/resolve?name=${encodeURIComponent(cleanDomain)}&type=NS`
-  const cfUrl = `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(cleanDomain)}&type=A`
-
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 8000)
-
-  try {
-    const tGoogleStart = performance.now()
-    const [aRes, nsRes] = await Promise.all([
-      fetch(aUrl, { headers: { Accept: 'application/dns-json' }, signal: controller.signal }),
-      fetch(nsUrl, { headers: { Accept: 'application/dns-json' }, signal: controller.signal }),
-    ])
-    const googleLatency = Math.max(1, Math.round(performance.now() - tGoogleStart))
-
-    let cfLatency = googleLatency
-    try {
-      const tCfStart = performance.now()
-      const cfRes = await fetch(cfUrl, { headers: { Accept: 'application/dns-json' }, signal: controller.signal })
-      if (cfRes.ok) {
-        cfLatency = Math.max(1, Math.round(performance.now() - tCfStart))
-      }
-    } catch {
-      // Keep googleLatency if CF DoH fails
-    }
-
-    clearTimeout(timeoutId)
-
-    if (!aRes.ok || !nsRes.ok) {
-      throw new Error(`DNS resolver returned HTTP ${aRes.status}/${nsRes.status} for "${cleanDomain}".`)
-    }
-
-    const aData = await aRes.json()
-    const nsData = await nsRes.json()
-
-    if (aData.Status === 3) {
-      const avgLat = Math.round((googleLatency + cfLatency) / 2)
-      return {
-        domain: cleanDomain,
-        timestamp: Date.now(),
-        records: { A: [], AAAA: [], NS: [], CNAME: [], MX: [], TXT: [] },
-        authoritative: [],
-        vantagePoints: [
-          {
-            id: 'google',
-            name: 'Google Public DNS',
-            ip: '8.8.8.8',
-            location: 'Multi-Region Tier 1',
-            latency_ms: googleLatency,
-            rcode: 'NXDOMAIN',
-            status: 'ONLINE',
-            answers: [],
-            source: 'SOURCE: Google Public DNS DoH probe (8.8.8.8)',
-          },
-          {
-            id: 'cloudflare',
-            name: 'Cloudflare Anycast',
-            ip: '1.1.1.1',
-            location: 'Global Anycast Edge',
-            latency_ms: cfLatency,
-            rcode: 'NXDOMAIN',
-            status: 'ONLINE',
-            answers: [],
-            source: 'SOURCE: Cloudflare Anycast DoH probe (1.1.1.1)',
-          },
-          {
-            id: 'quad9',
-            name: 'Quad9 DNS',
-            ip: '9.9.9.9',
-            location: 'Threat-Filtered Anycast',
-            latency_ms: googleLatency,
-            rcode: 'NXDOMAIN',
-            status: 'ONLINE',
-            answers: [],
-            source: 'SOURCE: Quad9 DNS DoH probe (9.9.9.9)',
-          },
-          {
-            id: 'opendns',
-            name: 'OpenDNS / Cisco',
-            ip: '208.67.222.222',
-            location: 'Anycast Backbone',
-            latency_ms: cfLatency,
-            rcode: 'NXDOMAIN',
-            status: 'ONLINE',
-            answers: [],
-            source: 'SOURCE: OpenDNS / Cisco DoH probe (208.67.222.222)',
-          },
-        ],
-        latency: avgLat,
-        medianLatency: avgLat,
-        meanLatency: avgLat,
-        p95: Math.max(googleLatency, cfLatency),
-        errorRate: 0.0,
-        resolutionFailureRate: 0.0,
-        nxDomainRate: 100.0,
-        servfailRate: 0.0,
-        timeoutRate: 0.0,
-        dominantRcode: 'NXDOMAIN',
-        healthScore: 100.0,
-        systemStatus: 'not_found',
-      }
-    }
-    if (aData.Status === 2) {
-      throw new Error(`DNS resolution failed: SERVFAIL. Upstream nameservers failed while resolving "${cleanDomain}".`)
-    }
-    if (aData.Status === 5) {
-      throw new Error(`DNS resolution refused: REFUSED by upstream resolver for "${cleanDomain}".`)
-    }
-    if (aData.Status !== 0 || !aData.Answer || aData.Answer.length === 0) {
-      const rcodeNames = { 1: 'FORMERR', 2: 'SERVFAIL', 3: 'NXDOMAIN', 4: 'NOTIMP', 5: 'REFUSED' }
-      const rcode = rcodeNames[aData.Status] || `RCODE_${aData.Status}`
-      throw new Error(`DNS lookup failed (${rcode}). No authoritative A address records found for "${cleanDomain}".`)
-    }
-
-    const ips = (aData.Answer || [])
-      .filter((rec) => rec.type === 1 || rec.type === 28)
-      .map((rec) => rec.data)
-
-    if (ips.length === 0) {
-      throw new Error(`No IP addresses found in DNS answer for "${cleanDomain}".`)
-    }
-
-    const nameservers = (nsData.Answer || [])
-      .filter((rec) => rec.type === 2)
-      .map((rec) => rec.data.replace(/\.$/, ''))
-
-    const vantagePoints = [
-      {
-        id: 'google',
-        name: 'Google Public DNS',
-        ip: '8.8.8.8',
-        location: 'Multi-Region Tier 1',
-        latency_ms: googleLatency,
-        rcode: 'NOERROR',
-        status: 'ONLINE',
-        answers: ips,
-        source: 'SOURCE: Google Public DNS DoH probe (8.8.8.8)',
-      },
-      {
-        id: 'cloudflare',
-        name: 'Cloudflare Anycast',
-        ip: '1.1.1.1',
-        location: 'Global Anycast Edge',
-        latency_ms: cfLatency,
-        rcode: 'NOERROR',
-        status: 'ONLINE',
-        answers: ips,
-        source: 'SOURCE: Cloudflare Anycast DoH probe (1.1.1.1)',
-      },
-      {
-        id: 'quad9',
-        name: 'Quad9 DNS',
-        ip: '9.9.9.9',
-        location: 'Threat-Filtered Anycast',
-        latency_ms: googleLatency,
-        rcode: 'NOERROR',
-        status: 'ONLINE',
-        answers: ips,
-        source: 'SOURCE: Quad9 DNS DoH probe (9.9.9.9)',
-      },
-      {
-        id: 'opendns',
-        name: 'OpenDNS / Cisco',
-        ip: '208.67.222.222',
-        location: 'Anycast Backbone',
-        latency_ms: cfLatency,
-        rcode: 'NOERROR',
-        status: 'ONLINE',
-        answers: ips,
-        source: 'SOURCE: OpenDNS / Cisco DoH probe (208.67.222.222)',
-      },
-    ]
-
-    const avgLat = Math.round((googleLatency + cfLatency) / 2)
-
-    return {
-      domain: cleanDomain,
-      timestamp: Date.now(),
-      records: { A: ips, NS: nameservers },
-      authoritative: nameservers.map((ns) => ({
-        host: ns,
-        ip: 'DISCOVERED',
-        latency_ms: avgLat,
-        rcode: 'NOERROR',
-        status: 'ONLINE',
-        source: `SOURCE: Direct authoritative discovery (${ns})`,
-      })),
-      vantagePoints,
-      latency: avgLat,
-      p95: Math.max(googleLatency, cfLatency),
-      errorRate: 0.0,
-      dominantRcode: 'NOERROR',
-      healthScore: 100.0,
-    }
-  } catch (err) {
-    clearTimeout(timeoutId)
-    throw err
-  }
-}
-
-/**
  * Format timestamp into HH:MM:SS string
  */
 function formatTime(ts) {
@@ -359,6 +155,12 @@ export function DNSStateProvider({ children }) {
 
     setState((prev) => {
       if (prev.target?.state !== 'ACTIVE') return prev
+
+      // Data hygiene: reject telemetry samples from mismatched/prior targets
+      const payloadDomain = payload.domain || payload.target?.cleanDomain || payload.target?.domain
+      if (payloadDomain && prev.target?.cleanDomain && payloadDomain.toLowerCase() !== prev.target.cleanDomain.toLowerCase()) {
+        return prev
+      }
 
       let norm
       try {
@@ -775,27 +577,7 @@ export function DNSStateProvider({ children }) {
           ingestMeasurementSample(probeRes)
         }
       } catch {
-        // Fallback to client DoH probe if backend is unreachable
-        try {
-          const dohRes = await clientDohProbe(state.target.cleanDomain)
-          if (dohRes) {
-            ingestMeasurementSample({
-              timestamp: dohRes.timestamp,
-              target: {
-                domain: state.target.cleanDomain,
-                cleanDomain: state.target.cleanDomain,
-                state: 'ACTIVE',
-                vantagePoints: dohRes.vantagePoints,
-                authoritative: dohRes.authoritative,
-              },
-              system: { status: 'healthy', health: dohRes.healthScore },
-              performance: { latency: dohRes.latency, p95: dohRes.p95 },
-              errors: { rate: dohRes.errorRate, dominant: dohRes.dominantRcode },
-            })
-          }
-        } catch {
-          // Keep prior state
-        }
+        // Backend probe failed; do not invent mock or fallback telemetry
       }
     }, 4500)
 
@@ -826,7 +608,8 @@ export function DNSStateProvider({ children }) {
           cleanDomain: clean,
           state: 'FAILED',
           status: 'TARGET UNAVAILABLE / VALIDATION FAILED',
-          error: `Invalid target format "${input || ''}". Please enter a valid fully qualified domain name or website URL (e.g. https://example.com or google.com).`,
+          error: 'Website unavailable — DNS_X cannot analyze this target.',
+          details: `Invalid target format "${input || ''}". Please enter a valid fully qualified domain name or website URL (e.g. https://example.com or google.com).`,
           analysisSteps: [
             { id: 'validate', label: 'Domain syntax & hostname format validation', status: 'failed' },
             { id: 'resolve', label: 'DNS resolution check', status: 'pending' },
@@ -874,7 +657,9 @@ export function DNSStateProvider({ children }) {
       const valResult = await validateDomainTarget(input)
 
       if (!valResult || valResult.valid === false) {
-        throw new Error(valResult?.message || valResult?.error || 'Website unavailable — DNS_X cannot analyze this target.')
+        const valErr = new Error(valResult?.message || valResult?.error || 'Website unavailable — DNS_X cannot analyze this target.')
+        if (valResult?.details) valErr.details = valResult.details
+        throw valErr
       }
 
       // Step 3: Backend Validation Succeeded! Proceed to probe & active monitoring
@@ -982,7 +767,9 @@ export function DNSStateProvider({ children }) {
       clearActiveTarget()
       activeSignalTrackerRef.current.clear()
 
-      const errorMsg = err.message || 'Website unavailable — DNS_X cannot analyze this target.'
+      const standardError = 'Website unavailable — DNS_X cannot analyze this target.'
+      const errorMsg = standardError
+      const errorDetails = err.details || (err.message && err.message !== standardError ? err.message : null)
 
       // Enforce strict Failure State: Zero metrics, AI analysis, signals, incidents, or mock/fallback data
       setState({
@@ -994,6 +781,7 @@ export function DNSStateProvider({ children }) {
           state: 'FAILED',
           status: 'TARGET UNAVAILABLE / VALIDATION FAILED',
           error: errorMsg,
+          details: errorDetails,
           analysisSteps: [
             { id: 'validate', label: `Validating hostname format: ${clean}`, status: 'complete' },
             { id: 'resolve', label: 'Backend target validation failed', status: 'failed' },

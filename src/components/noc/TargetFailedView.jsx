@@ -42,6 +42,11 @@ function TargetFailedView() {
         <p className={`mt-1 font-mono text-[11px] leading-5 ${isBackendOffline ? 'text-[#e2d5b5]' : 'text-[#e5b5b5]'}`}>
           {target?.error || 'Website unavailable — DNS_X cannot analyze this target.'}
         </p>
+        {target?.details && (
+          <p className="mt-2 text-[10px] text-[#e5b5b5]/70 border-t border-red-500/10 pt-2 font-mono break-words">
+            {target.details}
+          </p>
+        )}
       </div>
 
       <p className="mx-auto mt-4 max-w-md font-mono text-[10px] text-[#8c6d75]">

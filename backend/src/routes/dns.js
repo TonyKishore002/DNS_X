@@ -10,9 +10,9 @@ import {
   clearActiveTargetDomain,
   getActiveTargetDomain,
 } from '../services/dnsMeasurementService.js'
-import { validateTargetBackend, normalizeTargetInput } from '../services/targetValidationService.js'
+import { validateTargetBackend } from '../services/targetValidationService.js'
 import { getRecentMeasurements } from '../repositories/dnsMeasurementRepository.js'
-import { success, errors } from '../utils/response.js'
+import { success } from '../utils/response.js'
 import logger from '../config/logger.js'
 
 const router = Router()
